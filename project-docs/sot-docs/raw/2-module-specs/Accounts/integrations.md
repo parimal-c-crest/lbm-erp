@@ -1,0 +1,54 @@
+# Accounts — Cross-Module & Integration Touchpoints
+
+Source: `docs_from_blueprint/module/Accounts/07-cross-module-integrations.md`. The module's
+interface boundary spans at least seven related internal capabilities and three external systems.
+Described as capability/data-contract needs — what crosses each boundary and in which direction —
+not as any specific integration protocol or technology.
+
+**AccountStatement note**: the SalesOrder and RoaAdj relationships below, where they specifically
+concern statement generation (aging/balance reads, ROA-record creation/void from the statement
+screen, the B2B statement-request permission bypass), now also have their own dedicated spec at
+`docs_from_blueprint/module/AccountStatement/07-cross-module-integrations.md`. This file continues
+to describe Accounts' full cross-module boundary; the statement-specific slice is re-homed there and
+not fully re-derived here. Security-severity detail for the B2B/QuickBooks findings mentioned below
+lives in risks-and-open-questions.md rather than being restated in this file.
+
+## Related Modules
+
+| Module | What This Module Reads | What This Module Writes/Triggers | Direction | Sync/Async |
+|---|---|---|---|---|
+| SalesOrder | Pending/finalized SO lists (account-detail related-list panels); statement/aging queries read SalesOrder's line-item, finalize-data, and payment tables extensively (per-SO line-item detail, SO number/date/term display, job-scoped past-due aggregation). | No direct write from Accounts-module code into any SalesOrder table was found. | Accounts → SalesOrder, read-only. | Not specified in source (interactive reads; not a queued/async mechanism). |
+| Contacts | Every contact row scoped to the account (related-list, picker, dedupe-check). | Creates/relinks Contact entities; directly mutates the contact's own account-reference field (the FK sits on the Contact row); maintains its own denormalized contact-id list field on the Account. **Two independent code paths maintain the same denormalized field** — one via shared utility functions, one via hand-rolled, delimiter-based string manipulation — flagged as a maintainability/data-integrity risk. | Bidirectional, tightly coupled. | Synchronous (inline save-time writes; not stated as queued). |
+| Jobs | Jobs related-list panel; financial-pricing pipeline reads job-level total-owed/credit-limit/stop-over-credit-limit fields for job-scoped billing-cycle and finance-charge computation. | Three confirmed direct write paths: (1) credit-limit cascade — account-level credit-limit edit pushes the new value onto every job opted in to inherit it (at two separate call sites: account-save-time and account-inline-edit-time); (2) margin-price-level cascade — same opt-in pattern for a pricing-level field; (3) sales-person bulk-update pushing the account's sales-person assignment onto every job. A billing-cycle recompute mechanism also writes job-level billing-cycle past-due fields. | Accounts → Jobs, one-directional cascade writes. | Synchronous (inline cascades at save/edit time). No Jobs-module code was read to confirm whether any reverse relationship exists. |
+| PriceBooks / MPS pricing | Account's "MPS Bids/Contracts" related-list panel reads a pricebook-level table joined to job and accepted-quote data. | Exactly one specific write found: retiring/deactivating an old pricebook-level row (presumably when a new one is issued/accepted). No Accounts-module code creates a pricebook-level row. | Accounts → PriceBooks, narrow. | Not specified in source. Note: this confirms but substantially narrows a broader "PriceBooks" dependency the wider module inventory had hypothesized — the real relationship is specifically to the Masterbrand Pricing Schedule (MPS) bid/contract mechanism, not a general product-pricebook lookup. A separate price-plan-lookup file is confirmed dead (an emptied-out stub). |
+| RoaAdj (deposit/credit-adjustment ledger) | Statement rendering and ROA/credit aggregation read ROA/adjustment ledger and applied-detail tables extensively; a deferred/applied-amount detail popup reads the applied-detail table directly. | (1) Finance-charge/credit-memo posting instantiates and saves a RoaAdj record through the entity's own save path, both from the manual/batch and cron entry points (confirming the manual/batch path does not take a raw-SQL bypass for this specific call site); (2) a void/delete path directly removes applied-ROA-detail rows and reverses the unapplied-amount bookkeeping via shared utilities when voiding a deferred/applied amount from the statement screen. | Bidirectional. | Synchronous. Note: the account-merge flow includes the RoaAdj module but its actual use of RoaAdj records inside the merge process was not traced. |
+| MoneyReconciliation | Hypothesis tested, not confirmed — a repo-wide search for any MoneyReconciliation reference inside Accounts-module code returned zero hits. | None found. | No confirmed relationship. | N/A. The wider module inventory's hypothesis that Accounts depends on MoneyReconciliation is not supported by this evidence; MoneyReconciliation appears to be a SalesOrder/RoaAdj/cash-drawer-side concern. Checked only within Accounts-module files themselves — a relationship reached via a shared utility function outside that scope cannot be ruled out. |
+| Invoice | Confirmed thin/absent — a search of Accounts-module code for any direct invoice-table reference returned zero matches, consistent with SalesOrder's own finding that no invoice-entity-creation path exists anywhere traced. | None — the only apparent "invoice" surface is entirely a SalesOrder delegation (Reprint Invoices, see outputs.md); Accounts never touches invoice line-item or total data itself, it only orchestrates when/for which SO ids SalesOrder's own document-rendering happens. | N/A — no direct Accounts↔Invoice relationship exists. | N/A. Independent corroborating evidence for the open question SalesOrder's own blueprint already raised (whether any true invoice-entity-creation path exists anywhere in the wider system). |
+
+## External Systems
+
+| System | What Crosses the Boundary | Direction | Trigger | Sync/Async |
+|---|---|---|---|---|
+| QuickBooks | Full account header data (name, contact name, phone/fax, billing/shipping address, credit limit, account number, sales rep) built as a Customer create/update request; AR-aging, invoice, credit-memo, and check data intended to be pulled back into account custom fields covering the past-due buckets and related totals. | Bidirectional by design — Accounts → QuickBooks (customer create/update push, both an inline per-edit push and a separate batch-sync cron), QuickBooks → Accounts (AR/aging/invoice/check/credit-memo pull-back). Same structurally queue-based integration mechanism as SalesOrder's own blueprint documents for its own sync. | Account edit (inline push) or batch-sync cron. | Structurally asynchronous (every push/pull function builds a queue-entry object intended for later consumption by an external desktop client) **but confirmed dead in practice**: every queue-enqueue call site in the integration-helper file is commented out — the full request payload is built every time, but the line that actually places it in the queue never executes. Load-bearing fact for whether Accounts↔QuickBooks sync is live functionality worth porting; see risks-and-open-questions.md. |
+| B2B storefront (front-end site) | Full account JSON payload (create/update/delete) pushed to a separate front-end web application's REST API; a proposed B2B username validated for cross-account uniqueness, with a welcome email sent on success. | Accounts → B2B site (account CRUD push, one-way REST call, response relayed back to the caller) and Accounts → email (credential delivery). | Account create/update/delete; B2B username registration. | Synchronous — both the outbound API call and the email send happen inline within the same request. Security-relevant details (disabled certificate verification on the outbound call; plaintext-password transmission in the welcome email; a permission-check bypass for statement requests flagged as originating from the B2B front end) are documented in risks-and-open-questions.md rather than restated here. |
+| Fanbuilder (loyalty/customer-signup platform) | Pending customer-signup records staged in a local temp table by an external source, reconciled into an Account record on manual accept; a confirmation callback sent back to the platform once the account is created. | Bidirectional — inbound (signup data lands via a staging table populated by code outside this module, not traced by this module's own passes) and outbound (account creation triggers a confirmation callback to the platform). | Manual accept action on a staged signup record. | Synchronous — the accept flow's account-save, confirmation-callback, and status-write all happen inline in one request. This is a structurally separate integration surface from a second, independent Fanbuilder integration documented in SalesOrder's own blueprint (coupon validate/redeem and completed-transaction push) — same external platform and shared client library, different purpose. A third write site for the Fanbuilder-status fields lives in a SalesOrder-module file outside this module's own file scope (see workflows.md) — not itself described in this cross-module-integrations pass's own read set, a scope artifact called out explicitly rather than silently lost. |
+
+## Open items (integration-specific)
+
+- The account-merge process's actual use of RoaAdj records was not traced beyond confirming the
+  merge file includes the RoaAdj module.
+- The MoneyReconciliation "no relationship" finding was scoped to Accounts-module files only — a
+  relationship reached via a shared utility function called from Accounts but defined elsewhere
+  cannot be ruled out; "not confirmed" is the honest finding, not proof of definite absence.
+- Whether a broader product-pricebook-to-account relationship exists beyond the narrow MPS
+  bid/contract mechanism was not confirmed — if one exists, it likely lives in SalesOrder or
+  Products module code, outside this module's own pass scope.
+- Fanbuilder's pending-signup staging table's actual population source (presumably an external
+  webhook/API endpoint outside this module) was not traced; only the Accounts-side accept/reject
+  consumption was read.
+- The QuickBooks queue-push dead-code finding bears directly on whether the account's past-due/AR
+  data ever reflects fresh QuickBooks data in production — cross-references calculations.md's open
+  question about whether Total Owed is ever updated synchronously versus only by the nightly cron.
+- The two shared utility functions behind the Contacts denormalized-field write paths were called
+  but not read in the source pass — their exact effect was inferred from context rather than
+  confirmed line-by-line.

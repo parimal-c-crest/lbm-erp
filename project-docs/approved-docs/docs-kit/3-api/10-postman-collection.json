@@ -1,0 +1,244 @@
+{
+  "info": {
+    "name": "LBM ERP Rewrite API",
+    "description": "Companion collection to 9-openapi.yaml. Keep endpoints in sync with the OpenAPI spec. Baseline covers project-wide auth resources plus one representative endpoint per illustrated resource (SalesOrders, Products, PurchaseOrders, AuditLog) — full per-module endpoint sets are added as each module's JIT 8-api.md cycle runs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://wbc.omnna-lbm.live/api/v1"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"\",\n  \"password\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/refresh-token",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh-token"]
+            }
+          }
+        },
+        {
+          "name": "Verify 2FA",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/verify-2fa",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "verify-2fa"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SalesOrders",
+      "item": [
+        {
+          "name": "List Sales Orders",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/sales-orders?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["sales-orders"],
+              "query": [
+                { "key": "cursor", "value": "" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Sales Order",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/sales-orders/:id",
+              "host": ["{{base_url}}"],
+              "path": ["sales-orders", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Create Sales Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sales-orders",
+              "host": ["{{base_url}}"],
+              "path": ["sales-orders"]
+            }
+          }
+        },
+        {
+          "name": "Finalize Sales Order",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/sales-orders/:id/finalize",
+              "host": ["{{base_url}}"],
+              "path": ["sales-orders", ":id", "finalize"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List/Search Products",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/products?limit=20&search=",
+              "host": ["{{base_url}}"],
+              "path": ["products"],
+              "query": [
+                { "key": "cursor", "value": "" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "PurchaseOrders",
+      "item": [
+        {
+          "name": "List Purchase Orders",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/purchase-orders?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["purchase-orders"],
+              "query": [
+                { "key": "cursor", "value": "" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Purchase Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendorId\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/purchase-orders",
+              "host": ["{{base_url}}"],
+              "path": ["purchase-orders"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AuditLog",
+      "item": [
+        {
+          "name": "List Audit Log",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/audit-log?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["audit-log"],
+              "query": [
+                { "key": "cursor", "value": "" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

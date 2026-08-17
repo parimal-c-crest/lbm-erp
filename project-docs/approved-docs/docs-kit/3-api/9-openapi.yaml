@@ -1,0 +1,421 @@
+openapi: 3.0.3
+
+info:
+  title: LBM ERP Rewrite API
+  description: >
+    Generated from 3-api/1-api-design.md through 8-api-versioning.md. Keep this
+    file in sync with those documents and with each module's own JIT
+    5-modules/<slug>/8-api.md — this is the machine-readable contract, the
+    .md files are the human-readable rationale. Baseline covers project-wide
+    auth resources only; each module's real endpoints are added here as that
+    module's JIT documentation cycle runs (per-module endpoints are NOT
+    invented ahead of that cycle).
+  version: 1.0.0
+  contact:
+    name: LBM ERP Rewrite
+    email: unassigned@example.com
+
+servers:
+  - url: https://{tenant}.omnna-lbm.live/api/v1
+    description: Production / per-tenant (subdomain-routed, ADR-056)
+    variables:
+      tenant:
+        default: wbc
+        description: Tenant subdomain — resolves to that tenant's own physical database.
+
+tags:
+  - name: Authentication
+    description: Login, token refresh, logout, password reset, 2FA
+  - name: SalesOrders
+    description: Order capture, quoting, fulfillment (full endpoint set generated at that module's JIT cycle)
+  - name: PurchaseOrders
+    description: PO lifecycle, receiving, reconciliation (full endpoint set generated at that module's JIT cycle)
+  - name: Products
+    description: Catalog, variants, categories (full endpoint set generated at that module's JIT cycle)
+  - name: AuditLog
+    description: Read-only, role-gated audit trail (ADR-068)
+
+paths:
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate and receive an access + refresh token pair
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Successful login (or a 2FA-required response if the role requires it, ADR-075)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '423':
+          description: Account locked (ADR-155)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Invalidate the current refresh token
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Logged out
+
+  /auth/refresh-token:
+    post:
+      tags: [Authentication]
+      summary: Exchange a valid refresh token for a new access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: Refresh token expired or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/verify-2fa:
+    post:
+      tags: [Authentication]
+      summary: Verify a submitted one-time code (role-gated, ADR-075)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        '200':
+          description: 2FA verified, tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: Invalid or expired code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sales-orders:
+    get:
+      tags: [SalesOrders]
+      summary: List sales orders (cursor-paginated, ADR-093)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Cursor-paginated list of sales orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    post:
+      tags: [SalesOrders]
+      summary: Create a sales order
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesOrder'
+      responses:
+        '201':
+          description: Sales order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sales-orders/{id}:
+    get:
+      tags: [SalesOrders]
+      summary: Get a sales order by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sales order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Sales order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sales-orders/{id}/finalize:
+    post:
+      tags: [SalesOrders]
+      summary: Finalize a sales order — server recomputes the total, never trusts a client-submitted one (ADR-135)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sales order finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '409':
+          description: Already finalized, or a concurrent-edit lock is held (ADR-079/080/084)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /products:
+    get:
+      tags: [Products]
+      summary: List/search products (shared search architecture, ADR-093)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cursor-paginated list of products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /purchase-orders:
+    get:
+      tags: [PurchaseOrders]
+      summary: List purchase orders (cursor-paginated, ADR-093)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Cursor-paginated list of purchase orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+    post:
+      tags: [PurchaseOrders]
+      summary: Create a purchase order
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrder'
+      responses:
+        '201':
+          description: Purchase order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /audit-log:
+    get:
+      tags: [AuditLog]
+      summary: Read the audit trail (role-gated view permission, ADR-068)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Cursor-paginated audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Caller lacks the audit-log.view permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Hashed/scoped/rate-limited API key for third-party/system callers — same Guards as JWT auth.
+
+  parameters:
+    CursorParam:
+      name: cursor
+      in: query
+      schema:
+        type: string
+      description: Opaque cursor for keyset pagination (ADR-093) — never offset/page-number.
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+
+  schemas:
+    SalesOrder:
+      type: object
+      required: [accountId]
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        total:
+          type: number
+          description: Always server-recomputed on finalize — never accepted as direct client input (ADR-135).
+
+    PurchaseOrder:
+      type: object
+      required: [vendorId]
+      properties:
+        id:
+          type: string
+          format: uuid
+        vendorId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: Real validated enum, not a free string (ADR-142).
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+        meta:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        error_code:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+        request_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time

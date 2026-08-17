@@ -1,0 +1,61 @@
+# PurchaseLineItem — Risks & Open Questions
+
+> Source: `docs_from_blueprint/module/PurchaseLineItem/09-risks-and-open-questions.md`, itself traced to
+> `blueprint/module/PurchaseLineItem/07-risk-findings.md` (individual findings) and
+> `08-consolidation-review.md` (master rollup).
+>
+> **This is the eleventh consecutive module processed under this documentation method to carry at least
+> one confirmed live SQL injection** — a pattern observation about the codebase as a whole, not a claim
+> specific to PurchaseLineItem's own design. Unlike some sibling modules, the standout finding here is
+> **not** the Critical-severity item — see PLI-RISK-002 below.
+
+## Risk Register
+
+| ID | Finding | Severity | Impact | Source |
+|---|---|---|---|---|
+| PLI-RISK-001 | A confirmed, unmitigated SQL injection in the entity's own audit-timestamp re-stamp logic — both the create and edit branches of this save-hook build an update statement by directly concatenating values (including, on the edit branch, the record's own id, sourced moments earlier from raw, unvalidated request input) into the statement's `WHERE` clause, with no parameterization at all. Reachable via any save request that edits an existing Purchase Line Item record. | Critical | Any row/table reachable from the database connection, subject to the connection's own privilege level. The eleventh consecutive module processed under this method to carry at least one confirmed live SQL injection. Mitigation: requirement R3 (security-by-construction) — see `entities-and-fields.md`. | `business-rules-and-validation.md` PLI-RULE-005; blueprint `07-risk-findings.md` |
+| PLI-RISK-002 | **The module's standout finding — not the injection.** The module's own inline-edit endpoint instantiates the wrong entity class entirely (a different module's own class, used elsewhere for backorder-log tracking), despite passing the correct module name as a string to the retrieval and save calls. Because both of those calls resolve their target tables from the instantiated object's own declared tables, not from the string argument, this endpoint has never correctly edited a Purchase Line Item field through its own UI, for as long as this code has existed in its current form — every legitimate use of the endpoint silently touches an unrelated module's data instead, with no error surfaced to the user in the success case. | High / High-correctness | Judged the module's biggest risk, over the SQL injection itself: unlike an injection, which requires an attacker to exploit it, this bug fires on *every* legitimate use of the endpoint. Mitigation: requirement R4 (correctly-scoped inline-edit). | `business-rules-and-validation.md` PLI-RULE-010; blueprint `07-risk-findings.md` |
+| PLI-RISK-003 | Six independent writers restate the same cost-extension formula, with confirmed precision and quantity-basis divergences. Not proven as a live, side-by-side divergence on any specific row (unlike a comparable finding in a sibling module's own blueprint, which achieved that proof), but the structural preconditions are confirmed identical. | High | Mitigation: requirement R2 (exactly one calculation path) — one shared calculation function, one rounding policy, one quantity-basis-per-call invariant, called by every writer. See `calculations.md`. | `calculations.md`; blueprint `07-risk-findings.md` |
+| PLI-RISK-004 | Two narrow post-creation update paths (the ASN-number and vendor-number backfills) use an unparameterized-concatenation shape matching the injection pattern confirmed elsewhere in this codebase, though whether the specific values involved are ever directly sourced from raw user input (which would upgrade this from Medium to Critical) was not traced to its ultimate origin in the source blueprint. | Medium | Mitigation: closed by the same security-by-construction requirement (R3) regardless of the unresolved reachability question — the new design's query layer has no unparameterized-concatenation code path for any caller to reach, confirmed-reachable or not. | `workflows.md`; blueprint `07-risk-findings.md` |
+| PLI-RISK-005 | A copy-paste, functional-correctness bug: `LoadList.php`'s PurchaseLineItem-scoped branch hardcodes a different module's own primary-key column name (never adapted from that other module's own equivalent file). The resulting operation would fail outright with an unknown-column error the moment this specific branch is actually reached. | Low/Medium | Not a security finding, and no caller of this specific branch was found anywhere in the source investigation, so live reachability is unconfirmed. Fixed at the schema level in the recommended rewrite schema (uniform `id` PK naming) — see `entities-and-fields.md`. | `business-rules-and-validation.md` PLI-RULE-014; blueprint `07-risk-findings.md` |
+| PLI-RISK-006 | `CallRelatedList.php` and `updateRelations.php` carry no PurchaseLineItem-specific logic at all, being verbatim leftovers from an entirely unrelated module's own equivalent files (the Campaigns pattern). | Low/Informational | Not carried forward into a new implementation at all. | blueprint `07-risk-findings.md` |
+| PLI-RISK-007 | A schema-authority ambiguity between two candidate group-relation tables: one referenced by the entity class (small, unindexed, 1 live row), one matching this codebase's own naming convention (indexed, 0 live rows, unreferenced by any code found). | Low/Informational | Neither row count is enough to settle intent — flagged for SME confirmation. Collapsed to one table in the recommended rewrite schema, with data/semantics left unpopulated until SME confirmation. | `entities-and-fields.md`; blueprint `07-risk-findings.md` |
+| PLI-RISK-008 | A structurally-live-but-functionally-inert custom-field companion table carrying ongoing per-row storage cost for zero business value (1,100 rows, one physical column, no business columns). | Low/Informational | Ongoing storage/join cost for no value. Not carried forward as a separate physical table in the recommended rewrite schema. | `entities-and-fields.md`; blueprint `07-risk-findings.md` |
+| PLI-RISK-009 | A silent no-op in the vendor-number backfill when the vendor reference is falsy (no confirmed live occurrence). | Low/Informational | Field is silently left at its default rather than explicitly nulled or rejected. | `business-rules-and-validation.md` PLI-RULE-004 |
+| PLI-RISK-010 | A confirmed-clean negative finding for dangerous dynamic-code patterns — no matches found anywhere in the module. | Low/Informational (positive finding) | No risk — noted for completeness. | blueprint `07-risk-findings.md` |
+| PLI-RISK-011 | A confirmed-clean negative finding that the module's own `Save.php` entry point instantiates the correct entity class — the wrong-entity-class pattern found elsewhere in the module (PLI-RISK-002) is absent from this specific file. | Low/Informational (positive finding) | No risk — noted for completeness, and as a contrast case to PLI-RISK-002. | blueprint `07-risk-findings.md` |
+
+**The single highest-priority finding**: unlike a module whose Critical-severity SQL injection is its own
+headline finding, this module's standout finding is the High-severity wrong-entity-class bug (PLI-RISK-002),
+not the Critical-severity injection (PLI-RISK-001). Combined, these two findings mean the legacy system
+currently has **no reliable, correct, user-facing way to edit a Purchase Line Item record's own fields**:
+the create/edit form's own path is both unvalidated and carries the module's SQL injection, while the
+inline-edit path doesn't touch the module's own table at all. The legacy module functions correctly only
+as a write-once snapshot populated by its six external writers — the read-model shape this entire
+specification characterizes, confirmed from the risk side as well: its "write surface" is not just
+vestigial, it is actively broken where it isn't insecure. A rewrite should treat both findings with equal
+design urgency, not weighted toward whichever carries the more familiar severity label — both block the
+same underlying capability (safely editing an existing record's own fields through this module's own UI),
+and the wrong-entity-class bug additionally puts an **unrelated module's data** (the backorder-log-tracking
+module's own records) at silent risk.
+
+## Open Questions
+
+| ID | Question | Why It's Ambiguous | Current Best Guess | Needs Confirmation? |
+|---|---|---|---|---|
+| PLI-OQ-001 | Which of the two group-relation tables was actually intended? | Neither candidate has enough live data (1 row vs. 0) to determine intent; no write-site code found for either. | None — no guess ventured. | Yes — SME |
+| PLI-OQ-002 | Is a specific line-code label distinction ("Groups" vs. "Line Code") a genuine difference or two names for one concept? | One writer applies a name-resolution step the other five don't; not resolved in the source blueprint. | None — no guess ventured. | Yes — SME |
+| PLI-OQ-003 | What is the real-world purpose of the group-name concept on either candidate table? | No write-site code was found for either candidate table anywhere in the source investigation. | None — no guess ventured. | Yes — SME |
+| PLI-OQ-004 | Is there a labeling/physical-type mismatch on the Line Number field? | Its CRM-registered type description suggests a text-shaped field despite the physical column being a true integer. | Likely a labeling artifact, not a real ambiguity, but not investigated further in the source blueprint. | Yes |
+| PLI-OQ-005 | Is Receiving's one confirmed write path its only write path, or does other Receiving-module code write this table directly, bypassing the entity class entirely? | The source investigation's search method would have missed a hypothetical direct write of that shape. | Assume single write path per confirmed evidence, but not closed out. | Yes |
+| PLI-OQ-006 | Are the ASN-matching update's own key values ever directly user-supplied? | Would upgrade PLI-RISK-004 from Medium to Critical if so; not traced to its ultimate origin. | Unknown. | Yes |
+| PLI-OQ-007 | Have the ASN-number/vendor-number fields' live population rates changed since the source snapshot? | Not queried in the source pass to keep database footprint minimal. | Assume similar to snapshot; a safe, read-only re-run would confirm. | No — low priority, safe re-run available |
+| PLI-OQ-008 | Does the shared delete mechanism's own internal checks apply any module-specific logic? | Not independently re-derived in the source blueprint — the same shared-framework boundary drawn throughout this documentation series. | Assume purely generic. | No — low priority |
+| PLI-OQ-009 | Have the six writers' formula/precision divergences ever produced a discrepancy observable on a live row touched by more than one writer? | Preconditions are structurally confirmed; no live-row comparison was performed. | Unknown; narrow in practical dollar impact given the sub-cent scale even if it has occurred. | Yes — before migration decisions |
+| PLI-OQ-010 | What is the upstream derivation of this module's own cost inputs (from PurchaseOrder-owned staging data)? | Belongs to a PurchaseOrder-pricing-focused investigation, not re-traced here. | N/A | No — out of this module's scope |
+| PLI-OQ-011 | Does any downstream reporting module compute a margin/gross-profit figure comparing this module's cost data against sell-side data elsewhere? | Not traced in the source blueprint. | Unknown. | No — low priority |
+| PLI-OQ-012 | Does the QuickBooks-push-named Customreport file feed an actual QuickBooks push, or is it purely a read-only report despite its name? | Not traced beyond the one matched query. | Unknown. | No — low priority |
+| PLI-OQ-013 | Does the wrong-entity-class bug (PLI-RISK-002) produce a silent no-op or actual cross-module data corruption, depending on a given system's specific id-numbering overlap between this module's own records and the unrelated module's? | Not empirically tested, per the no-destructive-testing constraint. | Unknown — could be either outcome depending on live id overlap. | Yes — but only via non-destructive method |
+
+<!-- Anti-hallucination discipline: nothing here should be silently resolved by guessing in
+     downstream stages. Every item stays open until explicitly answered. -->
