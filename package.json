@@ -1,0 +1,18 @@
+{
+  "name": "lbm-erp-rewrite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LBM ERP Rewrite — pnpm workspace monorepo (backend: NestJS, frontend: Next.js)",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@11.15.1",
+  "scripts": {
+    "dev": "pnpm --parallel --filter backend --filter frontend run dev",
+    "build": "pnpm --filter backend run build && pnpm --filter frontend run build",
+    "lint": "pnpm --filter backend run lint && pnpm --filter frontend run lint",
+    "typecheck": "pnpm --filter backend run typecheck && pnpm --filter frontend run typecheck",
+    "format": "prettier --write \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\""
+  }
+}
