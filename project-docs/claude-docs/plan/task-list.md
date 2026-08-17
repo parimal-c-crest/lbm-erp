@@ -20,7 +20,7 @@ Status values: `Available` / `Claimed` / `In Progress` / `Blocked` / `Done` / `C
 |----|------|-------------------|---------------|----------|--------------------------|--------|-------------|
 | T-001 | Initialize Git repository, connect GitHub remote, base `.gitignore`/README | `6-development/4-git-workflow.md` §4/§6, `2-folder-structure.md` §17 | — | S | repo root, `.gitignore`, `README.md` | Done | |
 | T-002 | Set up pnpm workspace (`pnpm-workspace.yaml`, root `package.json`) | `6-development/2-folder-structure.md` §4/§10, `1-development-environment.md` §7/§8 (ADR-013) | T-001 | S | `pnpm-workspace.yaml`, root `package.json` | Done | |
-| T-003 | Scaffold NestJS backend app | `6-development/2-folder-structure.md` §5, `1-development-environment.md` §7 | T-002 | M | `backend/` | Available | |
+| T-003 | Scaffold NestJS backend app | `6-development/2-folder-structure.md` §5, `1-development-environment.md` §7 | T-002 | M | `backend/` | Done | |
 | T-004 | Scaffold Next.js frontend app | `6-development/2-folder-structure.md` §6, `4-ui/8-frontend-development-standards.md` §4 | T-002 | M | `frontend/` | Available | |
 | T-005 | Initialize Prisma schema + local dev PostgreSQL database | `6-development/1-development-environment.md` §11, `2-database/1-database-design.md` | T-003 | M | `prisma/schema.prisma`, `backend/src/prisma/` | Available | |
 | T-006 | Configure environment variable templates (`.env.example`) | `6-development/1-development-environment.md` §9 | T-003, T-004 | S | `backend/.env.example`, `frontend/.env.local.example` | Available | |

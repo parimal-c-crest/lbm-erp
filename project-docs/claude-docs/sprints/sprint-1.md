@@ -37,7 +37,7 @@ RAID log and tech debt register reviewed (step 6a) — both empty, nothing to pu
 |-------|-----|------|----------|--------|-------------|
 | 1 | T-001 | Initialize Git repository, connect GitHub remote, base `.gitignore`/README | S | Done | |
 | 2 | T-002 | Set up pnpm workspace (`pnpm-workspace.yaml`, root `package.json`) | S | Done | |
-| 3 | T-003 | Scaffold NestJS backend app | M | Available | |
+| 3 | T-003 | Scaffold NestJS backend app | M | Done | |
 | 4 | T-004 | Scaffold Next.js frontend app | M | Available | |
 | 5 | T-005 | Initialize Prisma schema + local dev PostgreSQL database | M | Available | |
 | 6 | T-006 | Configure environment variable templates (`.env.example`) | S | Available | |
