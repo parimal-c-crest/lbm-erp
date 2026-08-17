@@ -39,7 +39,7 @@ RAID log and tech debt register reviewed (step 6a) — both empty, nothing to pu
 | 2 | T-002 | Set up pnpm workspace (`pnpm-workspace.yaml`, root `package.json`) | S | Done | |
 | 3 | T-003 | Scaffold NestJS backend app | M | Done | |
 | 4 | T-004 | Scaffold Next.js frontend app | M | Done | |
-| 5 | T-005 | Initialize Prisma schema + local dev PostgreSQL database | M | Available | |
+| 5 | T-005 | Initialize Prisma schema + local dev PostgreSQL database | M | Done | |
 | 6 | T-006 | Configure environment variable templates (`.env.example`) | S | Available | |
 | 7 | T-007 | Configure ESLint + Prettier + TypeScript strict mode (both apps) | M | Available | |
 | 8 | T-008 | Wire Tailwind CSS + shadcn/ui + design tokens into frontend | M | Available | |

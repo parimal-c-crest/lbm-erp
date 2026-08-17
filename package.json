@@ -9,10 +9,14 @@
   },
   "packageManager": "pnpm@11.15.1",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "pnpm --parallel --filter backend --filter frontend run dev",
     "build": "pnpm --filter backend run build && pnpm --filter frontend run build",
     "lint": "pnpm --filter backend run lint && pnpm --filter frontend run lint",
     "typecheck": "pnpm --filter backend run typecheck && pnpm --filter frontend run typecheck",
     "format": "prettier --write \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\""
+  },
+  "devDependencies": {
+    "prisma": "^7.9.1"
   }
 }

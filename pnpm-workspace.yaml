@@ -2,4 +2,6 @@ packages:
   - "backend"
   - "frontend"
 allowBuilds:
+  '@prisma/engines': true
+  prisma: true
   unrs-resolver: true
