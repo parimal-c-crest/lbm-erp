@@ -35,7 +35,7 @@ RAID log and tech debt register reviewed (step 6a) — both empty, nothing to pu
 
 | Order | ID | Task | Estimate | Status | Assigned To |
 |-------|-----|------|----------|--------|-------------|
-| 1 | T-001 | Initialize Git repository, connect GitHub remote, base `.gitignore`/README | S | In Progress | |
+| 1 | T-001 | Initialize Git repository, connect GitHub remote, base `.gitignore`/README | S | Done | |
 | 2 | T-002 | Set up pnpm workspace (`pnpm-workspace.yaml`, root `package.json`) | S | Available | |
 | 3 | T-003 | Scaffold NestJS backend app | M | Available | |
 | 4 | T-004 | Scaffold Next.js frontend app | M | Available | |
