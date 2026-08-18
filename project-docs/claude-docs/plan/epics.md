@@ -9,7 +9,12 @@ started, not that the strategy was declined. See `6-implementation-plan/1-implem
 Module epics' task lists are `TBD — awaiting just-in-time module documentation` until that module's
 `docs-kit/5-modules/<slug>/` is generated (`7-sprint-planning/1-sprint-planning.md` step 2a) —
 consistent with the default JIT flow. Non-module epics whose source docs are already approved
-(Environment Setup, App Shell/Chrome) have real tasks now (`task-list.md`).
+(Environment Setup, App Shell/Chrome) have real tasks now (`task-list.md`). Users
+(`docs-kit/5-modules/users/`) is the first module whose 11-document set is fully generated and
+approved (2026-08-18) — Design Status set to `Approved` for both its epics (EPIC-004/005), SoT
+folded in (`sot-docs/index.md`, 2026-08-18), and its real task list now derived: 36 tasks (T-029
+through T-064) across EPIC-004 (UI Design) and EPIC-005 (Backend/API) — see `task-list.md`. Every
+other module epic remains `TBD`.
 
 ---
 
@@ -17,9 +22,9 @@ consistent with the default JIT flow. Non-module epics whose source docs are alr
 
 | ID | Epic | Milestone | Doc Reference | Description | Status | Design Status |
 |----|------|-----------|----------------|--------------|--------|----------------|
-| EPIC-001 | Environment Setup | M1 | `1-project/4-tech-stack.md`, `6-development/1-development-environment.md`, `2-folder-structure.md`, `4-git-workflow.md`, `9-ci-cd.md` | Install/wire the full tech stack so the project runs locally end to end. | In Progress | *(n/a — not design-first)* |
-| EPIC-002 | Platform Administration (Skeleton Control Panel) | M1 | `1-project/3-feature-breakdown.md` FEAT-015; `decisions-log.md` ADR-056/057/059 | Tenant provisioning, migration fanout, Super Admin support accounts, cron/job management. Cross-tenant infra, not one of the 15 business modules. | Not Started | *(n/a)* |
-| EPIC-003 | App Shell / Chrome | M2 | `4-ui/1-navigation.md`, `4-ui/3-design-system.md`, `4-ui/4-component-standards.md` | Branding, sidebar/topbar navigation shell, responsive shell behavior, auth screens (login, session-expired), dashboard shell layout — owned here since M2 is the first milestone rendering a real (if mock-data) authenticated screen. | Not Started | blank |
+| EPIC-001 | Environment Setup | M1 | `1-project/4-tech-stack.md`, `6-development/1-development-environment.md`, `2-folder-structure.md`, `4-git-workflow.md`, `9-ci-cd.md` | Install/wire the full tech stack so the project runs locally end to end. | Complete | *(n/a — not design-first)* |
+| EPIC-002 | Platform Administration (Skeleton Control Panel) | M1 | `1-project/3-feature-breakdown.md` FEAT-015; `decisions-log.md` ADR-056/057/059/182-185; `epic-002-platform-administration/1-design.md` | Tenant provisioning, migration fanout, Super Admin support accounts, cron/job management. Cross-tenant infra, not one of the 15 business modules. | Complete | Approved |
+| EPIC-003 | App Shell / Chrome | M2 | `4-ui/1-navigation.md`, `4-ui/3-design-system.md`, `4-ui/4-component-standards.md` | Branding, sidebar/topbar navigation shell, responsive shell behavior, auth screens (login, session-expired), dashboard shell layout — owned here since M2 is the first milestone rendering a real (if mock-data) authenticated screen. | Complete | blank |
 | EPIC-034 | Maintenance | *(none — persists across every milestone)* | — | Standing epic for small post-launch fixes routed here by `12-maintenance/1-triage.md` that don't warrant their own epic or milestone. | Not Started | *(n/a)* |
 
 ---
@@ -30,7 +35,7 @@ Every row: task list `TBD — awaiting just-in-time module documentation`.
 
 | ID | Epic | Module Slug | Status | Design Status |
 |----|------|-------------|--------|----------------|
-| EPIC-004 | Users — UI Design | `users` | Not Started | blank |
+| EPIC-004 | Users — UI Design | `users` | Complete* | Approved* |
 | EPIC-006 | Location — UI Design | `location` | Not Started | blank |
 | EPIC-008 | Products — UI Design | `products` | Not Started | blank |
 | EPIC-010 | UOM — UI Design | `uom` | Not Started | blank |
@@ -46,6 +51,10 @@ Every row: task list `TBD — awaiting just-in-time module documentation`.
 | EPIC-030 | Account Statement — UI Design | `account-statement` | Not Started | blank |
 | EPIC-032 | Settings — UI Design | `settings` | Not Started | blank |
 
+\* EPIC-004: all 17 tasks Done, but the Design-First Strategy's real developer live-browser
+review/sign-off never ran — see `raid-log.md` R-004. Treat as functionally complete, not
+developer-approved, until that review happens.
+
 ---
 
 ## Module epics — Backend/API (Milestones 3-9)
@@ -54,7 +63,7 @@ Every row: task list `TBD — awaiting just-in-time module documentation`.
 
 | ID | Epic | Module Slug | Milestone | Status | Design Status |
 |----|------|-------------|-----------|--------|----------------|
-| EPIC-005 | Users — Backend/API | `users` | M3 | Not Started | blank |
+| EPIC-005 | Users — Backend/API | `users` | M3 | In Progress | Approved* |
 | EPIC-007 | Location — Backend/API | `location` | M3 | Not Started | blank |
 | EPIC-009 | Products — Backend/API | `products` | M3 | Not Started | blank |
 | EPIC-011 | UOM — Backend/API | `uom` | M3 | Not Started | blank |
@@ -77,3 +86,8 @@ Every row: task list `TBD — awaiting just-in-time module documentation`.
 | Date | Change |
 |------|--------|
 | 2026-08-17 | Initial creation — 34 epics (3 non-module + 30 module UI/Backend pairs + Maintenance). |
+| 2026-08-18 | EPIC-004/005 (Users) Design Status set to `Approved` — full 11-document JIT set generated, reviewed against 14 pre-existing Users-specific ADRs, corrected, and promoted to `docs-kit/5-modules/users/`. |
+| 2026-08-18 | EPIC-004/005 (Users) real task list derived — 36 tasks (T-029–T-064), scoped re-run of `6-implementation-plan/1-implementation-plan.md` steps 2-6/8. See `task-list.md`. |
+| 2026-08-18 | EPIC-004 status set to `In Progress` — T-029 Done (Sprint 3's first task). |
+| 2026-08-18 | EPIC-004 status set to `Complete*` — all 17 Sprint 3 tasks Done; starred because the Design-First live-review gate didn't run (R-004). |
+| 2026-08-18 | EPIC-005 status set to `In Progress` — Sprint 4 (T-046–T-054, the RBAC foundation) Done, started out of sequence while M2 isn't complete (R-004). T-055 onward not yet built. |

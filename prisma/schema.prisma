@@ -12,3 +12,410 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// `TenantRegistry` is only ever queried/written while connected as the skeleton database
+// (`epic-002-platform-administration/1-design.md` §2/§4, ADR-183/184) — it exists in every tenant
+// database too since all databases share one migration history (ADR-056), but stays empty/unused
+// outside skeleton by application convention, not schema-level enforcement.
+enum TenantType {
+  live
+  demo
+  testing
+}
+
+enum TenantRuntimeMode {
+  live
+  sandbox
+}
+
+model TenantRegistry {
+  id          String            @id @default(uuid())
+  subdomain   String            @unique
+  databaseUrl String            @map("database_url")
+  type        TenantType
+  runtimeMode TenantRuntimeMode @default(live) @map("runtime_mode")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  jobSchedules JobSchedule[]
+
+  @@map("tenant_registries")
+}
+
+// Users module (M3, EPIC-005) — extends the ADR-185 bootstrap shape rather than replacing it,
+// per `docs-kit/5-modules/users/4-schema.md` §4. `defaultLocation` stays a plain string column
+// (not a real FK) since the Location module doesn't exist yet in this codebase — a deliberate,
+// documented simplification, not a silent deviation from the doc's "FK -> locations.id, Location
+// module" note; becomes a real FK once Location ships. No `tenant_id` anywhere (ADR-073 —
+// isolation is physical, database-per-tenant, ADR-056).
+model User {
+  id               String     @id @default(uuid())
+  email            String     @unique
+  username         String     @unique
+  passwordHash     String     @map("password_hash")
+  roleId           String?    @map("role_id")
+  isSuperAdmin     Boolean    @default(false) @map("is_super_admin")
+  firstName        String     @map("first_name")
+  lastName         String?    @map("last_name")
+  phone            String?
+  status           UserStatus @default(active)
+  defaultLocation  String?    @map("default_location")
+  failedLoginCount Int        @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?  @map("locked_until")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  createdBy        String?    @map("created_by")
+  updatedBy        String?    @map("updated_by")
+  isDeleted        Boolean    @default(false) @map("is_deleted")
+  deletedAt        DateTime?  @map("deleted_at")
+
+  role              Role?                        @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  hrProfile         UserHrProfile?
+  preference        UserPreference?
+  notificationPrefs UserNotificationPreference[]
+  groupMemberships  GroupMembership[]
+  timeClockRecords  TimeClockRecord[]
+  personalDays      PersonalDay[]
+  quickBooksSync    QuickBooksSyncPointer?
+  mailAccount       MailAccount?
+
+  createdByUser User?  @relation("UserCreatedBy", fields: [createdBy], references: [id])
+  updatedByUser User?  @relation("UserUpdatedBy", fields: [updatedBy], references: [id])
+  createdUsers  User[] @relation("UserCreatedBy")
+  updatedUsers  User[] @relation("UserUpdatedBy")
+
+  @@map("users")
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+// 1:1 child, split out of the legacy ~120-column User Header (`4-schema.md` §1). Field set kept
+// deliberately minimal for MVP — expand as later modules need specific HR data, not speculatively.
+model UserHrProfile {
+  userId   String    @id @map("user_id")
+  salary   Decimal?  @db.Decimal(12, 2)
+  hireDate DateTime? @map("hire_date") @db.Date
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_hr_profiles")
+}
+
+// 1:1 child — UI/calendar/print display preferences (`4-schema.md` §3).
+model UserPreference {
+  userId             String @id @map("user_id")
+  defaultLandingPage String @default("dashboard") @map("default_landing_page")
+  theme              String @default("light")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model UserNotificationPreference {
+  id               String  @id @default(uuid())
+  userId           String  @map("user_id")
+  notificationType String  @map("notification_type")
+  enabled          Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationType])
+  @@map("user_notification_preferences")
+}
+
+// Hierarchical (parent/child + depth) — kept from the legacy design per developer decision
+// (`4-schema.md` §1). Seeded with ADR-002's 5 tenant-facing roles as a flat starting layer.
+model Role {
+  id           String  @id @default(uuid())
+  name         String  @unique
+  description  String?
+  parentRoleId String? @map("parent_role_id")
+  depth        Int     @default(0)
+
+  parent               Role?                     @relation("RoleHierarchy", fields: [parentRoleId], references: [id], onDelete: Restrict)
+  children             Role[]                    @relation("RoleHierarchy")
+  users                User[]
+  twoFactorRequirement RoleTwoFactorRequirement?
+  roleProfiles         RoleProfile[]
+
+  @@map("roles")
+}
+
+// Admin-configurable per role (ADR-075) — replaces the legacy hardcoded allowlist.
+model RoleTwoFactorRequirement {
+  roleId   String  @id @map("role_id")
+  required Boolean @default(false)
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@map("role_two_factor_requirements")
+}
+
+model Profile {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+
+  roleProfiles            RoleProfile[]
+  moduleActionPermissions ProfileModuleActionPermission[]
+
+  @@map("profiles")
+}
+
+// One consolidated save path for Profile edits reached via a Role — no duplicate Profile-row
+// construction on edit (ADR-134, closes the legacy SaveRole.php/UpdateProfileChanges.php defect).
+model RoleProfile {
+  roleId    String @map("role_id")
+  profileId String @map("profile_id")
+
+  role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, profileId])
+  @@map("role_profiles")
+}
+
+// Module/action grant — every permission explicitly set on create, no fail-open default
+// (ADR-156, closes USR-RISK-013). Collapses `profile_module_action_permissions` +
+// `profile_module_access` from the doc into one row per (profile, module, action) for MVP
+// simplicity — field-level permissions (`profile_field_permissions`) deferred, no SoT source
+// names concrete field-level rules to enforce yet.
+model ProfileModuleActionPermission {
+  id        String  @id @default(uuid())
+  profileId String  @map("profile_id")
+  module    String
+  action    String
+  granted   Boolean @default(false)
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, module, action])
+  @@map("profile_module_action_permissions")
+}
+
+model Group {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+
+  memberships GroupMembership[]
+
+  @@map("groups")
+}
+
+enum GroupMemberType {
+  USER
+  ROLE
+  ROLE_AND_SUBORDINATES
+}
+
+// Assignment/roster use only — never consulted for record-visibility decisions (ADR-081).
+// `memberId` is polymorphic (User.id or Role.id depending on `memberType`), application-validated
+// against the type rather than two separate FK columns.
+model GroupMembership {
+  id         String          @id @default(uuid())
+  groupId    String          @map("group_id")
+  memberType GroupMemberType @map("member_type")
+  memberId   String          @map("member_id")
+  userId     String?         @map("user_id")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("group_memberships")
+}
+
+enum TimeClockStatus {
+  clock_in
+  clock_out
+  unclosed_needs_resolution
+}
+
+enum HoursType {
+  regular
+  holiday
+  personal
+  sick
+  vacation
+}
+
+enum LaborStatus {
+  working
+  break_  @map("break")
+  lunch
+}
+
+// `clockOut` is NULL when open, never a sentinel timestamp — an unresolved punch surfaces as
+// `unclosed_needs_resolution` (ADR-037), never silently excluded from payroll.
+model TimeClockRecord {
+  id          String          @id @default(uuid())
+  userId      String          @map("user_id")
+  clockIn     DateTime        @map("clock_in")
+  clockOut    DateTime?       @map("clock_out")
+  punchDate   DateTime        @map("punch_date") @db.Date
+  status      TimeClockStatus
+  hoursType   HoursType       @default(regular) @map("hours_type")
+  helpMessage String?         @map("help_message")
+
+  user        User                @relation(fields: [userId], references: [id])
+  taskDetails ClockInTaskDetail[]
+
+  @@index([userId, punchDate])
+  @@map("time_clock_records")
+}
+
+// "What are you working on" annotation on a clock-in session (ADR-077).
+model ClockInTaskDetail {
+  id                String      @id @default(uuid())
+  timeClockRecordId String      @map("time_clock_record_id")
+  laborStatus       LaborStatus @default(working) @map("labor_status")
+  task              String?
+
+  timeClockRecord TimeClockRecord @relation(fields: [timeClockRecordId], references: [id], onDelete: Cascade)
+
+  @@map("clock_in_task_details")
+}
+
+model PersonalDay {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  hoursType   HoursType @map("hours_type")
+  startDate   DateTime  @map("start_date") @db.Date
+  endDate     DateTime? @map("end_date") @db.Date
+  dayCount    Int?      @map("day_count")
+  startTime   String?   @map("start_time")
+  endTime     String?   @map("end_time")
+  note        String?
+  submittedAt DateTime  @default(now()) @map("submitted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("personal_days")
+}
+
+// `username` is text, not a FK — legacy matches by string, preserved deliberately (Known Gaps,
+// `4-schema.md` §4).
+model LoginHistory {
+  id         String    @id @default(uuid())
+  username   String
+  loginTime  DateTime  @default(now()) @map("login_time")
+  logoutTime DateTime? @map("logout_time")
+  status     String
+  sessionId  String?   @map("session_id")
+  userIp     String?   @map("user_ip")
+
+  @@index([username, loginTime])
+  @@map("login_history")
+}
+
+// Revived QuickBooks employee sync (ADR-074) — minimal purpose-built pointer table, replaces the
+// legacy's 6 orphaned GL-mapping columns.
+model QuickBooksSyncPointer {
+  userId         String    @id @map("user_id")
+  qbListId       String?   @map("qb_list_id")
+  qbEditSequence String?   @map("qb_edit_sequence")
+  status         String    @default("pending")
+  errorMessage   String?   @map("error_message")
+  lastSyncedAt   DateTime? @map("last_synced_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("quickbooks_sync_pointers")
+}
+
+// Self-contained personal-productivity feature, carried forward as-is (`4-schema.md` §1).
+model MailAccount {
+  userId       String  @id @map("user_id")
+  displayName  String  @map("display_name")
+  replyToEmail String  @map("reply_to_email")
+  signature    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mail_accounts")
+}
+
+// Standalone, no FK to User (`4-schema.md` §2) — minimal backend-only shape per ADR-188
+// (backend/API-only, no dedicated UI in this MVP).
+model NotificationScheduler {
+  id             String  @id @default(uuid())
+  name           String
+  cronExpression String  @map("cron_expression")
+  enabled        Boolean @default(true)
+
+  @@map("notification_schedulers")
+}
+
+model WordTemplate {
+  id      String @id @default(uuid())
+  name    String
+  content String
+
+  @@map("word_templates")
+}
+
+// Cron/job management (design doc §7, ADR-059) — skeleton-only bookkeeping for BullMQ repeatable
+// jobs. Actual job *work* (what a job does) is a per-consuming-module concern, deferred until
+// those modules exist (design doc §9) — T-026 builds only the scheduling/staggering/history
+// infrastructure, proven with a no-op placeholder processor.
+enum JobRunStatus {
+  running
+  success
+  failure
+  timeout
+}
+
+// Fires once daily at `baseHour:baseMinute` (UTC) — matches ADR-059's own staggering example
+// ("tenant A's nightly job runs at 1:00am, tenant B's at 1:15am") without needing to parse/mutate
+// arbitrary cron expressions to apply a per-tenant offset (§ JobSchedule below).
+model JobDefinition {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  baseHour      Int      @map("base_hour")
+  baseMinute    Int      @map("base_minute")
+  masterEnabled Boolean  @default(true) @map("master_enabled")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  schedules JobSchedule[]
+  runs      JobRun[]
+
+  @@map("job_definitions")
+}
+
+// One row per (job, tenant) — the per-tenant offset that prevents every tenant's copy of the same
+// job firing simultaneously (ADR-059's core concern). `timezoneReference` defaults to UTC; once
+// Location exists (M3) this reads that tenant's primary Location's Timezone field instead
+// (ADR-059) — not available yet, so not wired to a real field here.
+model JobSchedule {
+  id                String   @id @default(uuid())
+  jobDefinitionId   String   @map("job_definition_id")
+  tenantSubdomain   String   @map("tenant_subdomain")
+  enabled           Boolean  @default(true)
+  offsetMinutes     Int      @default(0) @map("offset_minutes")
+  timezoneReference String   @default("UTC") @map("timezone_reference")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  jobDefinition JobDefinition  @relation(fields: [jobDefinitionId], references: [id])
+  tenant        TenantRegistry @relation(fields: [tenantSubdomain], references: [subdomain])
+
+  @@unique([jobDefinitionId, tenantSubdomain])
+  @@map("job_schedules")
+}
+
+model JobRun {
+  id              String       @id @default(uuid())
+  jobDefinitionId String       @map("job_definition_id")
+  tenantSubdomain String       @map("tenant_subdomain")
+  status          JobRunStatus @default(running)
+  startedAt       DateTime     @default(now()) @map("started_at")
+  finishedAt      DateTime?    @map("finished_at")
+  durationMs      Int?         @map("duration_ms")
+  errorMessage    String?      @map("error_message")
+
+  jobDefinition JobDefinition @relation(fields: [jobDefinitionId], references: [id])
+
+  @@map("job_runs")
+}

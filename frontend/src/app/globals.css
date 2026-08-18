@@ -1,26 +1,208 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Design tokens — `4-ui/3-design-system.md` §4 (ADR-025/ADR-177). Values sourced from the
+ * reviewed Stitch mockup (`sot-docs/design/screenshots/stitch_lbm_design/DESIGN.md`) — this
+ * file is the single wiring point, no component hardcodes a color/radius/shadow directly.
+ */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Surfaces */
+  --background: #f8fafc;
+  --foreground: #1e293b;
+  --card: #ffffff;
+  --card-foreground: #1e293b;
+  --popover: #ffffff;
+  --popover-foreground: #1e293b;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Surface container layers (nested panels) */
+  --surface-container-low: #f0f3ff;
+  --surface-container: #e7eeff;
+  --surface-container-high: #dee8ff;
+  --surface-container-highest: #d8e3fb;
+
+  /* Brand */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f97316;
+  --secondary-foreground: #ffffff;
+  --tertiary: #7c3aed;
+  --tertiary-foreground: #ffffff;
+
+  /* Muted / accent (shadcn convention, mapped to neutral scale) */
+  --muted: #f0f3ff;
+  --muted-foreground: #434655;
+  --accent: #e7eeff;
+  --accent-foreground: #1e293b;
+
+  /* Status */
+  --success: #10b981;
+  --success-foreground: #ffffff;
+  --warning: #f59e0b;
+  --warning-foreground: #1e293b;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --info: #2563eb;
+  --info-foreground: #ffffff;
+
+  /* Structure */
+  --border: #e2e8f0;
+  --input: #cbd5e1;
+  --ring: #2563eb;
+
+  /* Inverse surfaces (tooltips, inverse-emphasis chips) */
+  --inverse-surface: #263143;
+  --inverse-on-surface: #ecf1ff;
+
+  /* Text secondary */
+  --text-secondary: #434655;
+
+  /* Chart categorical series (dataviz skill — validated via scripts/validate_palette.js).
+     Light mode reuses brand hues directly; dark mode overrides chart-2 only (see below) since
+     the light-mode orange fails the chart lightness-band check against the dark surface, even
+     though it's fine for buttons/badges at that size — a chart-specific concern, not a general
+     contrast one. */
+  --chart-1: var(--primary);
+  --chart-2: var(--secondary);
+  --chart-3: var(--tertiary);
+
+  /* Radius scale (`4-ui/3-design-system.md` §4 Border Radius) */
+  --radius-sm: 0.5rem; /* 8px — chips, small widgets, badges */
+  --radius-md: 1rem; /* 16px — buttons, inputs (DEFAULT) */
+  --radius-lg: 2rem; /* 32px — cards, primary containers */
+  --radius-xl: 3rem; /* 48px — floating navbars only */
+  --radius: var(--radius-md);
+
+  /* Shadows (`4-ui/3-design-system.md` §4 Shadows) */
+  --shadow-color: 0deg 0% 0%;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+
+  /* Z-index scale (`4-ui/3-design-system.md` §4 Z-Index Scale) */
+  --z-dropdown: 100;
+  --z-sticky-header: 400;
+  --z-sidebar-mobile: 500;
+  --z-modal: 1000;
+  --z-toast: 1100;
+  --z-tooltip: 1200;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f172a;
+    --foreground: #ecf1ff;
+    --card: #1e293b;
+    --card-foreground: #ecf1ff;
+    --popover: #1e293b;
+    --popover-foreground: #ecf1ff;
+
+    --surface-container-low: #1a2436;
+    --surface-container: #202b40;
+    --surface-container-high: #26324a;
+    --surface-container-highest: #2c3954;
+
+    --muted: #1a2436;
+    --muted-foreground: #a3aabd;
+    --accent: #202b40;
+    --accent-foreground: #ecf1ff;
+
+    --border: #334155;
+    --input: #334155;
+
+    --inverse-surface: #ecf1ff;
+    --inverse-on-surface: #263143;
+
+    --text-secondary: #a3aabd;
+
+    /* Chart-2 (orange) darkened for dark-mode chart marks only — validated separately from the
+       light-mode value; passes `validate_palette.js --mode dark` where the light value fails
+       the lightness-band check. */
+    --chart-2: #c2410c;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  /* Fonts (`4-ui/3-design-system.md` §4 Typography) */
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* Colors — bridged into Tailwind's `bg-*`/`text-*`/`border-*` utilities */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-foreground: var(--tertiary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-inverse-surface: var(--inverse-surface);
+  --color-inverse-on-surface: var(--inverse-on-surface);
+  --color-text-secondary: var(--text-secondary);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+
+  /* Radius — bridged into Tailwind's `rounded-*` utilities */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  /* Shadows — bridged into Tailwind's `shadow-*` utilities */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@layer utilities {
+  /* Glass token (`4-ui/3-design-system.md` §4 Shadows) — modals, floating nav; not a plain
+     box-shadow, kept as an explicit utility rather than a Tailwind theme shadow key. */
+  .shadow-glass {
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
 }

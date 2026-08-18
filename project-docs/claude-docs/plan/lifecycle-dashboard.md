@@ -11,8 +11,8 @@ status this dashboard summarizes. For a visual, browser-viewable version, run
 
 | Order | Milestone | Status |
 |-------|-----------|--------|
-| 1 | M1 — Environment Setup | In Progress |
-| 2 | M2 — UI, All Modules, Static/Mock Data | Not Started |
+| 1 | M1 — Environment Setup | Released (v1.0.0, 2026-08-18) |
+| 2 | M2 — UI, All Modules, Static/Mock Data | In Progress |
 | 3 | M3 — Backend/API: Identity & Catalog Foundation | Not Started |
 | 4 | M4 — Backend/API: Vendors & Pricing | Not Started |
 | 5 | M5 — Backend/API: Accounts | Not Started |
@@ -21,31 +21,44 @@ status this dashboard summarizes. For a visual, browser-viewable version, run
 | 8 | M8 — Backend/API: History Accumulators & Statements | Not Started |
 | 9 | M9 — Backend/API: Settings | Not Started |
 
-**Active milestone**: M1 — Environment Setup.
+**Active milestone**: M2 — UI, All Modules, Static/Mock Data.
 
 ## Epics
 
-34 total (3 non-module + 30 module UI/Backend pairs + 1 standing Maintenance epic) — all
-`Not Started`. Full detail: `epics.md`.
+34 total (3 non-module + 30 module UI/Backend pairs + 1 standing Maintenance epic). Full detail:
+`epics.md`.
+
+- **Complete**: EPIC-001 (Environment Setup), EPIC-002 (Platform Administration), EPIC-003
+  (App Shell/Chrome).
+- **Not Started**: the remaining 31 (30 module UI/Backend pairs + EPIC-034 Maintenance) — but
+  EPIC-004/005 (Users) now have Design Status `Approved`: the module's full 11-document JIT set is
+  generated, reviewed, and promoted to `docs-kit/5-modules/users/` (2026-08-18). Task derivation
+  (`5-update-sot/`, then a scoped `6-implementation-plan/` re-run) not yet run — that's the next
+  concrete step.
 
 ## Sprints
 
-**Sprint 1** (`sprints/sprint-1.md`) — Not Started. EPIC-001 (Environment Setup), 12 tasks.
+- **Sprint 1** (`sprints/sprint-1.md`) — Complete. EPIC-001, 12 tasks, all Done.
+- **Sprint 2** (`sprints/sprint-2.md`) — Complete. EPIC-002, 7 tasks, all Done.
+- EPIC-003's 9 tasks (T-013–T-021) were completed without a dedicated sprint file — tracked
+  directly in `task-list.md`.
 
 ## Tasks
 
-21 real tasks defined (12 in EPIC-001, 9 in EPIC-003) — the 12 in EPIC-001 are `Available` and in
-Sprint 1. Every other epic's tasks are `TBD` pending JIT module documentation. Full detail:
-`task-list.md`.
+28 real tasks defined (12 EPIC-001 T-001–T-012, 9 EPIC-003 T-013–T-021, 7 EPIC-002 T-022–T-028) —
+**all 28 Done**. Every module epic's tasks remain `TBD` pending JIT module documentation. Full
+detail: `task-list.md`.
 
 ## Open Risks / Issues / Dependencies
 
-1 open: R-001 — EPIC-002 (Platform Administration) has no documentation-generation path defined yet.
-Not currently blocking. Full detail: `raid-log.md`.
+1 open: R-002 — M1 released without a real deploy/production-verification pass (no hosting
+provisioned yet). R-001 resolved (EPIC-002's doc-generation path was defined and fully executed).
+Full detail: `raid-log.md`.
 
 ## Outstanding Tech Debt
 
-None logged yet. Full detail: `tech-debt-register.md`.
+1 open: TD-001 — `/api/v1` API prefix documented in frontend env template but not implemented in
+`backend/src/main.ts`. Full detail: `tech-debt-register.md`.
 
 ---
 
@@ -54,3 +67,5 @@ None logged yet. Full detail: `tech-debt-register.md`.
 | Date | Change |
 |------|--------|
 | 2026-08-17 | Initial creation, alongside `milestones.md`, `epics.md`, `task-list.md`, `dependencies.md`, `milestone-status.md`, `raid-log.md`, `tech-debt-register.md`. |
+| 2026-08-18 | Refreshed for M1 release (v1.0.0) — EPIC-001/002/003 Complete, M1 Released, M2 In Progress, R-001 resolved, R-002 + TD-001 opened. |
+| 2026-08-18 | Users module (EPIC-004/005) Design Status set to `Approved` — first module through the full JIT documentation cycle. ADR-186/187 added; `3-api/2-authentication.md` amended (v1.1) to match ADR-187. |

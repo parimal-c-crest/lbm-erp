@@ -129,11 +129,14 @@ Read: an arrow `A --> B` means B depends on A. Rationale for the Backend/API ord
   last despite being used broadly for configuration, since nothing else's *build* depends on it
   existing first.
 
-## Task-level (within EPIC-001 and EPIC-003)
+## Task-level (within EPIC-001, EPIC-002, EPIC-003, EPIC-004, EPIC-005)
 
 See `task-list.md`'s own **Dependencies** column for each task — not duplicated here as a second
 graph; the table is the authoritative source, this document's Mermaid graph covers the epic level
-only (where the fan-out is large enough that a table alone is hard to read at a glance).
+only (where the fan-out is large enough that a table alone is hard to read at a glance). EPIC-004
+(Users — UI Design)'s tasks (T-029–T-045) depend on EPIC-003's shell primitives (Sidebar/TopBar/
+Sheet/Badge); EPIC-005 (Users — Backend/API)'s tasks (T-046–T-064) each wire onto their
+corresponding EPIC-004 screen task, per the epic-level `UI_USERS --> BE_USERS` edge above.
 
 ---
 
@@ -142,3 +145,4 @@ only (where the fan-out is large enough that a table alone is hard to read at a 
 | Date | Change |
 |------|--------|
 | 2026-08-17 | Initial creation. |
+| 2026-08-18 | Noted task-level dependency pattern for EPIC-004/005 (Users) now that real tasks exist. |

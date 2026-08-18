@@ -1,27 +1,44 @@
 # SoT Index
 
-Populated by `prompts/1-discovery/3-sot-review.md`. Catalog of every Source of Truth document under
-`project-docs/sot-docs/raw/` — what it is and what's currently authoritative (all entries below are
-raw material; nothing has been promoted to `approved-docs/docs-kit/` yet).
+Populated by `prompts/1-discovery/3-sot-review.md`, kept current by `prompts/5-update-sot/1-update-sot.md`.
+Catalog of every Source of Truth document. Two tiers:
 
-**Date note**: no document in this corpus carries an explicit date. Relative sequencing exists in-text
+- **Authoritative (docs-kit)** — approved, current. Always check this tier first.
+- **Raw** (`project-docs/sot-docs/raw/`) — original material. Still authoritative wherever nothing has
+  superseded it yet; superseded files are moved (whole, unmodified) to `project-docs/sot-docs/archive/`
+  and listed there instead.
+
+**Date note**: no raw document carries an explicit date. Relative sequencing exists in-text
 (module blueprinting order, MVP confirmed 2026-08-15, a project-docs-loss incident 2026-08-14) but no
 file has its own `**Date:**`-style header. Not repeated per-row below.
 
-**Secrets scan result**: every file in `raw/` was read in full by the cataloging pass. No live
-credential, API key, token, or password *value* was found anywhere in the corpus. All
-credential-adjacent content is either a column/field-name description (e.g. `.s3_secret`,
-`.server_password`) or prose describing the legacy system's plaintext-credential-storage vulnerability
-as a documented finding — never an actual secret string. **Nothing excluded from this index on
-secrets grounds.**
-
-**Design references**: `sot-docs/design/design-source.md` exists, left unchecked — developer chose to
-defer this decision to `1-discovery/4-design-creation.md` rather than pick now. No design material
-(Figma/screenshots/tokens) exists under `sot-docs/design/` yet.
+**Secrets scan result**: every file in `raw/` was read in full by the original cataloging pass. No live
+credential, API key, token, or password *value* was found anywhere in the corpus. **Nothing excluded
+from this index on secrets grounds.**
 
 ---
 
-## 0 — Business Decision (`raw/0-business-decision/`)
+## Authoritative Documents (`project-docs/approved-docs/docs-kit/`)
+
+All decisions cited below are locked in `project-docs/claude-docs/gap-analysis/decisions-log.md`
+(ADR-###) — see that log for rationale, never re-decide something already there. Verdicts and
+confidence detail: `project-docs/claude-docs/gap-analysis/review-log.md`.
+
+| Category | Files | Approved | Supersedes (raw) |
+|---|---|---|---|
+| [1-project/](../approved-docs/docs-kit/1-project/) | 4 (overview, requirements, feature-breakdown, tech-stack) | 2026-08-17 | `raw/1-business-requirements/project-overview.md`, `requirements.md`, `tech-stack.md` (now `archive/1-business-requirements/`); `raw/3-tech-stack-decision/tech-stack.md` (now `archive/3-tech-stack-decision/`) |
+| [2-database/](../approved-docs/docs-kit/2-database/) | 4 (design, ERD, migration strategy, standards) | 2026-08-17 | None — new synthesis, no single raw predecessor |
+| [3-api/](../approved-docs/docs-kit/3-api/) | 10 (design, auth, authz, query/response standards, error handling, dev standards, versioning, OpenAPI spec, Postman collection) | 2026-08-17 (auth doc refreshed to v1.1 on 2026-08-18) | None — new synthesis |
+| [4-ui/](../approved-docs/docs-kit/4-ui/) | 8 (navigation, user flows, design system, component/form/responsive/accessibility standards, frontend dev standards) | 2026-08-17 | None — new synthesis, tokens sourced from reviewed Stitch mockup (ADR-177) |
+| [5-modules/users/](../approved-docs/docs-kit/5-modules/users/) | 11 (module spec through testing) | 2026-08-18 | `raw/2-module-specs/Users/*` (11 files, now `archive/2-module-specs/Users/`) |
+| [6-development/](../approved-docs/docs-kit/6-development/) | 6 of 10 (environment, folder structure, coding standards, git workflow, containerization, CI/CD — early wave) | 2026-08-17 | None — new synthesis. Late wave (implementation-workflow, testing-strategy, deployment-strategy, debugging-guide) not yet generated. |
+| 7-cross-cutting/ | Not yet generated | — | — |
+
+## Raw Source of Truth (`project-docs/sot-docs/raw/`)
+
+Still authoritative where not superseded above.
+
+### 0 — Business Decision (`raw/0-business-decision/`)
 
 | Document | Type | Summary |
 |---|---|---|
@@ -29,34 +46,32 @@ defer this decision to `1-discovery/4-design-creation.md` rather than pick now. 
 | [feasibility-study.md](../sot-docs/raw/0-business-decision/feasibility-study.md) | feasibility study | Confirms technical/organizational feasibility via the proven 9-pass extraction method on 16 modules; leaves tech stack, budget, timeline, and named sponsor explicitly open; flags UOM's missing tenant column. |
 | [project-charter.md](../sot-docs/raw/0-business-decision/project-charter.md) | charter | Authorizes continuation of the rewrite; defines MVP-16 + UOM/Account Statement scope, success criteria, records the finalized stack decision inline. |
 
-## 1 — Business Requirements (`raw/1-business-requirements/`)
+### 1 — Business Requirements (`raw/1-business-requirements/`)
 
 | Document | Type | Summary |
 |---|---|---|
 | [assumptions-and-constraints.md](../sot-docs/raw/1-business-requirements/assumptions-and-constraints.md) | assumptions-and-constraints | Dev DB representative of prod, MVP-16 boundary holds, legacy code reflects deployed code; constraints include finalized tech stack, no budget/timeline, vtiger EOL. |
-| [glossary.md](../sot-docs/raw/1-business-requirements/glossary.md) | glossary | Defines Blueprint/Doc1-3/Pass 0-8, MVP-16 module list, extracted modules (UOM, AccountStatement), confidence vocabulary (Confirmed/Inferred/Unclear), domain abbreviations. |
+| [glossary.md](../sot-docs/raw/1-business-requirements/glossary.md) | glossary | Defines Blueprint/Doc1-3/Pass 0-8, MVP-16 module list, extracted modules (UOM, AccountStatement), confidence vocabulary (Confirmed/Inferred/Unclear), domain abbreviations. No docs-kit glossary exists yet — still authoritative in full. |
 | [module-breakdown.md](../sot-docs/raw/1-business-requirements/module-breakdown.md) | module breakdown | One paragraph per MVP-16 + UOM + Account Statement module, each naming its headline confirmed defect. |
-| [non-functional-requirements.md](../sot-docs/raw/1-business-requirements/non-functional-requirements.md) | non-functional-requirements | Security as headline NFR (structural SQLi elimination, encrypted credentials); data-integrity requirements; multi-tenancy/auditability/performance/availability flagged unassessed. |
-| [project-overview.md](../sot-docs/raw/1-business-requirements/project-overview.md) | vision/overview | Why LBM is replacing its vtiger-based ERP, the 9-pass extraction method, current progress (16/135 modules, 42 dead, 93 in scope), open items. |
-| [requirements.md](../sot-docs/raw/1-business-requirements/requirements.md) | functional requirements (BRD) | Per-module functional requirements each tied to closing a specific confirmed legacy defect. |
-| [scope.md](../sot-docs/raw/1-business-requirements/scope.md) | scope statement | Defines in-scope MVP-16 + 2 extracted capabilities, deferred/excluded modules; excludes stack selection, UI/UX design, cutover execution from this phase. |
+| [non-functional-requirements.md](../sot-docs/raw/1-business-requirements/non-functional-requirements.md) | non-functional-requirements | Security as headline NFR (structural SQLi elimination, encrypted credentials); data-integrity requirements; multi-tenancy/auditability/performance/availability flagged unassessed. Still authoritative — `7-cross-cutting/1-non-functional-requirements.md` not yet generated. |
+| ~~project-overview.md~~ | — | **Superseded** by `docs-kit/1-project/1-project-overview.md` (2026-08-17). Moved to `archive/1-business-requirements/project-overview.md`. |
+| ~~requirements.md~~ | — | **Superseded** by `docs-kit/1-project/2-requirements.md` (2026-08-17). Moved to `archive/1-business-requirements/requirements.md`. |
+| [scope.md](../sot-docs/raw/1-business-requirements/scope.md) | scope statement | Defines in-scope MVP-16 + 2 extracted capabilities, deferred/excluded modules; excludes stack selection, UI/UX design, cutover execution from this phase. Not superseded — no docs-kit equivalent. |
 | [stakeholders.md](../sot-docs/raw/1-business-requirements/stakeholders.md) | stakeholders | Derived from module specs, not a formal RACI; flags no named executive sponsor or IT/infra stakeholder. |
-| [tech-stack.md](../sot-docs/raw/1-business-requirements/tech-stack.md) | tech-stack decision (detailed rationale) | Full stack writeup tied to specific legacy findings; **near-duplicate of `3-tech-stack-decision/tech-stack.md`, see Conflicts below.** |
+| ~~tech-stack.md~~ | — | **Superseded** by `docs-kit/1-project/4-tech-stack.md` (2026-08-17). Moved to `archive/1-business-requirements/tech-stack.md`. |
 
-## 2 — Module Specs (`raw/2-module-specs/`) — 18 modules × 11 files = 198 files
+### 2 — Module Specs (`raw/2-module-specs/`) — 17 modules remaining × 11 files = 187 files (Users promoted, see below)
 
 Each module folder: `build-guidance.md`, `business-rules-and-validation.md`, `calculations.md`,
 `entities-and-fields.md`, `integrations.md`, `module-overview.md`, `outputs.md`, `permissions.md`,
 `risks-and-open-questions.md`, `screens-and-user-flows.md`, `workflows.md` — all `module-spec:
-<section>` type. One-line-per-module summary below (full per-file detail was reviewed in full during
-cataloging; module-level summary given here to keep the index scannable — see individual files for
-detail).
+<section>` type.
 
 | Module | Provenance | Headline finding |
 |---|---|---|
 | [SalesOrder/](../sot-docs/raw/2-module-specs/SalesOrder/) | Blueprint-sourced, pilot module | 123 business rules; client-trusted finalize total (Critical) is the single most consequential finding in the whole blueprint; confirmed live SQL injection in `stockorder_ajax_action.php`. |
 | [Accounts/](../sot-docs/raw/2-module-specs/Accounts/) | Blueprint-sourced | 112 rules; near-total absence of server-side hard blocks; missing `vtiger_accountcreditcards` table; two disagreeing finance-charge engines (÷12 vs ÷365, ~30x divergence). |
-| [Users/](../sot-docs/raw/2-module-specs/Users/) | Blueprint-sourced | 66 rules; zero server-side validation on save; all 4 delete entry points lack id validation — root cause of a real data-loss incident; live SQLi in clock-in/out. |
+| ~~Users/~~ | — | **Superseded** by `docs-kit/5-modules/users/` (11 files, approved 2026-08-18). Moved whole to `archive/2-module-specs/Users/`. Field-extraction adaptation: `project-docs/claude-docs/analysis/module-field-extraction/users/`. |
 | [Location/](../sot-docs/raw/2-module-specs/Location/) | Blueprint-sourced, 4th module | 31 rules; total absence of a negative-QoH floor check across all 4 QoH-write paths; 4 confirmed SQL injections. |
 | [Products/](../sot-docs/raw/2-module-specs/Products/) | Blueprint-sourced, 5th module, largest (209 files) | 65 rules; 11 confirmed SQL injections (5 Critical, highest raw count in series); no field enforced required at save time anywhere. |
 | [Vendors/](../sot-docs/raw/2-module-specs/Vendors/) | Blueprint-sourced, 6th module | 48 rules; Vendor Line Code Description UPDATE has no vendor-scoping in its WHERE clause — silently overwrites other vendors' rows; highest Critical-finding density in series. |
@@ -73,22 +88,36 @@ detail).
 | [UOM/](../sot-docs/raw/2-module-specs/UOM/) | Session-found (no separate vtiger module; lower rigor, self-flagged) | 2 confirmed SQL injections; 46+ files bypass the shared conversion function via direct table access; permission check not re-enforced in the AJAX dispatcher. |
 | [AccountStatement/](../sot-docs/raw/2-module-specs/AccountStatement/) | Re-partitioned from Accounts (filtered subset, not independently re-swept, self-flagged) | B2B `isPermitted` check actively skipped for B2B-flagged requests; same ÷12-vs-÷365 finance-charge divergence as Accounts. |
 
-## 3 — Tech Stack Decision (`raw/3-tech-stack-decision/`)
+### 3 — Tech Stack Decision (`raw/3-tech-stack-decision/`)
 
 | Document | Type | Summary |
 |---|---|---|
-| [tech-stack.md](../sot-docs/raw/3-tech-stack-decision/tech-stack.md) | tech-stack decision (Stage 2 template / decision table) | Same stack decision as `1-business-requirements/tech-stack.md`, reformatted as a decision table; adds API-design detail (REST API-first, dual JWT+API-key auth, `/api/v1` versioning) not in the other copy. **Authoritative version — see Conflicts below.** |
+| ~~tech-stack.md~~ | — | **Superseded** by `docs-kit/1-project/4-tech-stack.md` (2026-08-17). Moved to `archive/3-tech-stack-decision/tech-stack.md`. |
 
 ---
 
+## Archive (`project-docs/sot-docs/archive/`)
+
+Superseded raw material — kept whole, unmodified, never deleted.
+
+| Archived file | Superseded by | Date |
+|---|---|---|
+| `archive/1-business-requirements/project-overview.md` | `docs-kit/1-project/1-project-overview.md` | 2026-08-17 |
+| `archive/1-business-requirements/requirements.md` | `docs-kit/1-project/2-requirements.md` | 2026-08-17 |
+| `archive/1-business-requirements/tech-stack.md` | `docs-kit/1-project/4-tech-stack.md` | 2026-08-17 |
+| `archive/3-tech-stack-decision/tech-stack.md` | `docs-kit/1-project/4-tech-stack.md` | 2026-08-17 |
+| `archive/2-module-specs/Users/*` (11 files) | `docs-kit/5-modules/users/*` (11 files) | 2026-08-18 |
+
 ## Duplicates / Conflicts flagged (not resolved here — for `6-gap-analysis.md`)
 
-1. **Tech-stack decision duplicated 4×**: `1-business-requirements/tech-stack.md`, `3-tech-stack-decision/tech-stack.md`, `project-charter.md`, and `assumptions-and-constraints.md` all restate the same Next.js/NestJS/PostgreSQL/Prisma/RLS/BullMQ/no-Docker decision. `3-tech-stack-decision/tech-stack.md` is the most complete (adds API/auth detail) — recommend treating it as authoritative and the others as historical echoes.
-2. **Numeric contradiction on eventual module count**: `scope.md`/`project-overview.md`/`business-case.md`/`project-charter.md` all state 135 total → 42 dead → **93** in scope long-term (78 remaining beyond MVP-16). `1-business-requirements/tech-stack.md` line ~104 instead states "18 of a probable **111** eventual modules." Not reconciled anywhere in the corpus.
-3. **Cross-tier account-assignment column named two different ways**: Pricebooklevel200's spec cites `vtiger_accountscf.cf_984` as the shared, undifferentiated-across-tiers assignment column; Pricebooklevel300's spec cites `cf_986` for what's asserted to be the *same* physical field. Needs a direct schema check to resolve.
-4. **Cross-sibling pricing-tier precedence** (Pricebooklevel200/300/800, and separately MPLPricePlan) is independently flagged as unresolved in multiple module specs — a real open cross-module dependency, not yet consolidated into one decision.
-5. **Heavy intentional duplication, not contradiction**: several findings are deliberately restated across 2-4 sibling files per the corpus's own cross-referencing convention (e.g. Accounts' finance-charge divisor mismatch, Pricebooklevel800's dead cascade-delete, GP%-divide-by-zero across all three pricing tiers, the "wrong-entity-class Campaigns write via `DetailViewAjax.php`" pattern repeated near-verbatim in Pricebooklevel200/300, PurchaseOrder/PurchaseLineItem/PurchaseHistory's "no `isPermitted()` on write endpoints" pattern). Consistent, not conflicting — flagged here only so a synthesis pass doesn't double-count them as independent findings.
-6. **Provenance/rigor is not uniform across modules** — UOM (session-found, no independent Pass-7 re-verification) and AccountStatement (filtered subset of Accounts' own register) are explicitly lower/differently-sourced rigor than the other 16 blueprint-sourced, Pass-7-re-verified modules. Should be reflected in any confidence rollup, not treated as equivalent.
+1. **Numeric contradiction on eventual module count**: `scope.md`/`project-overview.md`(archived)/`business-case.md`/`project-charter.md` all state 135 total → 42 dead → **93** in scope long-term (78 remaining beyond MVP-16). `1-business-requirements/tech-stack.md`(archived) line ~104 instead states "18 of a probable **111** eventual modules." Not reconciled anywhere in the corpus. Not addressed by docs-kit promotion — still open.
+2. **Cross-tier account-assignment column named two different ways**: Pricebooklevel200's spec cites `vtiger_accountscf.cf_984` as the shared, undifferentiated-across-tiers assignment column; Pricebooklevel300's spec cites `cf_986` for what's asserted to be the *same* physical field. Needs a direct schema check to resolve.
+3. **Cross-sibling pricing-tier precedence** (Pricebooklevel200/300/800, and separately MPLPricePlan) is independently flagged as unresolved in multiple module specs — a real open cross-module dependency, not yet consolidated into one decision.
+4. **Heavy intentional duplication, not contradiction**: several findings are deliberately restated across 2-4 sibling files per the corpus's own cross-referencing convention. Consistent, not conflicting — flagged here only so a synthesis pass doesn't double-count them as independent findings.
+5. **Provenance/rigor is not uniform across modules** — UOM (session-found, no independent Pass-7 re-verification) and AccountStatement (filtered subset of Accounts' own register) are explicitly lower/differently-sourced rigor than the other 16 blueprint-sourced, Pass-7-re-verified modules. Should be reflected in any confidence rollup, not treated as equivalent.
+
+No unresolved conflict exists between the newly promoted documents (1-project, 2-database, 3-api, 4-ui,
+5-modules/users, 6-development early wave) and the remaining SoT — verified during this update pass.
 
 ## Excluded / Flagged
 

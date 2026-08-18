@@ -8,11 +8,11 @@
 |--------|-------|
 | Project Name | LBM ERP Rewrite |
 | Authentication Type | JWT + API Key |
-| Version | 1.0 |
+| Version | 1.1 |
 | Status | Approved |
 | Author | Claude Code (docs-kit generation) |
 | Created Date | 2026-08-17 |
-| Last Updated | 2026-08-17 |
+| Last Updated | 2026-08-18 |
 | Approved By | Claude Code review (`4-document-review/1-document-review.md`, 2026-08-17) |
 
 ---
@@ -29,8 +29,10 @@ confirmed legacy gap. [Source: `decisions-log.md` ADR-075]
 
 # 2. Authentication Overview
 
-- **Login**: email + password, validated server-side; on success, an access token (short-lived) and a
-  refresh token (longer-lived) are issued.
+- **Login**: username + password, validated server-side; on success, an access token (short-lived)
+  and a refresh token (longer-lived) are issued. Username is a distinct field from Email — Email
+  stays a separate, also-required, also-unique contact field, not the login identifier. [Source:
+  `decisions-log.md` ADR-187]
 - **Identity verification**: bcrypt-hashed password comparison; 2FA challenge if the user's role
   requires it (ADR-075).
 - **Token/session management**: stateless JWT — no server-side session store; a refresh token exchanges
@@ -60,7 +62,7 @@ confirmed legacy gap. [Source: `decisions-log.md` ADR-075]
 
 | Method | Description | Supported |
 |---------|-------------|-----------|
-| Email & Password | Primary interactive login | Yes |
+| Username & Password | Primary interactive login (ADR-187) | Yes |
 | JWT | Access + refresh token pair, issued on successful login | Yes |
 | Refresh Token | Exchanges for a new access token | Yes |
 | API Key | Hashed at rest, scoped, rate-limited — third-party/system callers | Yes |
@@ -72,7 +74,7 @@ confirmed legacy gap. [Source: `decisions-log.md` ADR-075]
 
 # 5. User Authentication Flow
 
-1. User submits email + password.
+1. User submits username + password.
 2. Server validates credentials (bcrypt comparison).
 3. If the user's role requires 2FA (ADR-075's admin-configurable setting), a one-time code is emailed
    and must be verified before proceeding.
@@ -210,7 +212,7 @@ Header.Payload.Signature
 
 | Error | HTTP Status | Description |
 |--------|------------|-------------|
-| Invalid Credentials | 401 | Email/password mismatch |
+| Invalid Credentials | 401 | Username/password mismatch |
 | Token Expired | 401 | Access or refresh token past its TTL |
 | Invalid Token | 401 | Malformed or tampered token |
 | Unauthorized | 403 | Valid identity, insufficient role/permission (see `3-authorization.md`) |
@@ -285,6 +287,7 @@ authentication-only log:
 | Version | Date | Author | Description |
 |----------|------|--------|-------------|
 | 1.0 | 2026-08-17 | Claude Code | Initial draft |
+| 1.1 | 2026-08-18 | Claude Code | Login identifier changed from Email to Username throughout (ADR-187, raised during the Users module's own JIT documentation review — Username added as a distinct field from Email, superseding this document's original "Email & Password" framing). |
 
 ---
 

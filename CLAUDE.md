@@ -14,7 +14,7 @@ Approach: extract legacy behavior module-by-module from real code + live DB firs
 process), then rewrite tech-agnostic — but not a straight port. Every module went through a design
 discussion before generation; where legacy had a bug, an ambiguity, or a clearly-better structure was
 possible, we decided fresh rather than porting the defect. All decisions are locked in
-`project-docs/claude-docs/gap-analysis/decisions-log.md` (181 ADRs as of this writing) — every
+`project-docs/claude-docs/gap-analysis/decisions-log.md` (188 ADRs as of this writing) — every
 generated document must reference that log, never re-decide something already locked there.
 
 **Target build: 15 MVP modules** (down from 18 blueprinted legacy modules — the legacy system's 4
@@ -50,47 +50,44 @@ Full list of what changed vs. the legacy design: `project-docs/claude-docs/gap-a
 | Containers | **Explicitly not used** — plain Node processes + managed/self-hosted Postgres and Redis run on any mainstream host without Docker, a deliberate portability choice, not an open item [`sot-docs/raw/3-tech-stack-decision/tech-stack.md`, `4-tech-stack.md` §14] |
 | Package manager / repo | pnpm workspace monorepo [ADR-013]; Git hosted on GitHub, `https://github.com/parimal-c-crest/lbm-erp.git`, GitHub Flow [ADR-181] |
 
-No code scaffolded yet — stack is decided, implementation hasn't started (see Where we are, below).
+**Implementation is underway** — see Where we are, below, and
+`project-docs/claude-docs/plan/task-list.md`/`epics.md`/`milestone-status.md` for exact current
+status (those files are the source of truth; this section is a snapshot, refreshed each session).
 
 ## Where we are
 
-Still in documentation/planning phase, not implementation — **discovery/gap-analysis is done, and
-document generation is well underway.** Status:
+Documentation generation for the upfront categories is done; module-by-module JIT documentation +
+implementation is now the active work. Status as of 2026-08-18:
 
-- ✅ `1-discovery/3-sot-review.md` — `sot-docs/index.md` built (13 top-level docs + 198 module-spec
-  files across 18 legacy modules, catalogued).
-- ✅ `1-discovery/5-project-analysis.md` — `claude-docs/analysis/` written (project-summary,
-  module-list, business-rules-summary, workflow-summary).
-- ✅ `1-discovery/6-gap-analysis.md` — `claude-docs/gap-analysis/` written (gap-analysis-report,
-  clarification-questions, decisions-log). Decisions-log now holds 181 ADRs, including a full
-  module-by-module design review for every one of the 15 MVP modules (ADR-029 through ADR-170),
-  ProductTracking's own fresh blueprint+review (ADR-166 through ADR-170), StoreTransfer's confirmed
-  deferral (ADR-144), and a growing set of cross-cutting calls made during document generation itself
-  (ADR-171 onward — API rate limits, CORS, package guidelines, the reused Stitch design mockup and
-  its token/layout split, icon library, Git hosting). **Read `decisions-log.md` before touching any
-  module or generating any document** — it's the single most load-bearing document in this project.
-- ✅ `2-document-plan/1-documentation-plan.md` — full generation order set.
-- ✅ `3-document-generate/01-project/project.md` → **`1-project/` approved** (4 docs: overview,
-  requirements, feature-breakdown, tech-stack).
-- ✅ `3-document-generate/02-database/database.md` → **`2-database/` approved** (4 docs).
-- ✅ `3-document-generate/03-api/api.md` → **`3-api/` approved** (10 docs, incl. OpenAPI spec +
-  Postman collection).
-- ✅ `3-document-generate/04-ui/ui.md` → **`4-ui/` approved** (all 8 docs). Design tokens sourced
-  live from a reviewed Stitch AI mockup (`sot-docs/design/screenshots/stitch_lbm_design/`) —
-  tokens only, its fixed-width layout explicitly rejected and rebuilt responsive (ADR-177).
-- ✅ `3-document-generate/06-development/development.md` **early wave** →
-  **`6-development/` early wave approved** (6 of 10 docs: development-environment,
-  folder-structure, coding-standards, git-workflow, containerization, ci-cd).
-  `8-containerization.md` is a fully-justified "Not Applicable" document — this project explicitly
-  doesn't use Docker (see Tech stack table above).
-- 🚧 `6-development/` **late wave** (`5-implementation-workflow.md`, `6-testing-strategy.md`,
-  `7-deployment-strategy.md`, `10-debugging-guide.md`) — not yet triggered; waits for the first
-  module's own JIT documentation cycle.
-- 🚧 `5-modules/` — none of the 15 MVP modules has its own JIT documentation set generated yet.
-- 🚧 `7-cross-cutting/` (NFR + threat model) — runs last, once every module is approved; not started.
-- ⏸️ **Next action when resumed**: run `7-sprint-planning/1-sprint-planning.md` to kick off the
-  first module's JIT documentation cycle — this is what triggers both `5-modules/<slug>/` and
-  `6-development/`'s late wave.
+- ✅ Discovery/gap-analysis, `sot-docs/index.md`, and the upfront doc categories
+  (`1-project/`, `2-database/`, `3-api/`, `4-ui/`, `6-development/` early wave) are all approved —
+  see `decisions-log.md` (188 ADRs) and `review-log.md` for the full record. **Read
+  `decisions-log.md` before touching any module or generating any document.**
+- ✅ `6-implementation-plan/1-implementation-plan.md` (initial run) — 9 milestones, 34 epics,
+  `claude-docs/plan/*` initialized.
+- ✅ **M1 (Environment Setup) — Released v1.0.0**, local-only (no real hosting yet, RAID R-002
+  open). EPIC-001 (scaffolding) and EPIC-002 (Platform Administration / skeleton control panel,
+  tenant provisioning + migration fanout + cron management) both Complete.
+- 🚧 **M2 (UI, All Modules, Static/Mock Data) — In Progress.** EPIC-003 (App Shell/Chrome) Complete.
+  **Users is the first module through its own JIT cycle** (`5-modules/users/`, 11 docs approved) —
+  its UI Design epic (EPIC-004) is done, all 17 tasks (Sprint 3), verified live via Playwright.
+  The other 14 modules' UI-Design epics remain `Not Started` — each needs its own JIT
+  documentation cycle first (`7-sprint-planning/1-sprint-planning.md` step 2a).
+- 🚧 **M3 (Backend/API: Identity & Catalog Foundation) — In Progress, started out of sequence**
+  (normally waits for M2 to fully complete first; started early on an explicit developer
+  instruction — see `raid-log.md` R-004). Users' Backend/API epic (EPIC-005) has its RBAC
+  foundation done (schema, auth/login/2FA/lockout, permission model, User/Role/Profile/Group CRUD
+  — Sprint 4, real e2e-tested); Time Clock/Payroll/Personal Days/QuickBooks/etc. backend work is
+  not started yet.
+- ⚠️ **Outstanding, not yet done**: the Design-First Strategy's real developer live-browser
+  review/approval of Users' UI pages never ran (developer was offline) — flagged in `raid-log.md`
+  R-003/R-004, still owed. **Nothing has been committed to git yet** — the whole tree past the
+  initial T-001–T-005 scaffolding commits is uncommitted working-tree state.
+- 🚧 `6-development/` late wave, `7-cross-cutting/` (NFR + threat model) — not started, wait for
+  more modules to complete their JIT cycles.
+- ⏸️ **Next action when resumed**: developer review of Users' built UI pages (closes R-003/R-004),
+  then either continue Users' Backend/API (T-055 onward) or run
+  `7-sprint-planning/1-sprint-planning.md` again for the next module's JIT documentation cycle.
 
 Visual design: a written UI/UX brief (ADR-024, Tailwind+shadcn/ui per ADR-025) plus a reviewed Stitch
 AI mockup (design-source.md's Screenshots box, tokens reused per ADR-177) together now cover both the

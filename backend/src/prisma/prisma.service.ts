@@ -1,16 +1,14 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
+
 import { PrismaClient } from '../generated/prisma/client';
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    super({ adapter });
+    // Read at construction time, not module load time — this must run after NestJS's
+    // ConfigModule has loaded `.env`, not during the synchronous import chain that precedes it.
+    super({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
   }
 
   async onModuleInit() {

@@ -2,7 +2,7 @@
 
 **Milestone**: M1 — Environment Setup
 **Epic**: EPIC-001 — Environment Setup
-**Status**: In Progress
+**Status**: Complete
 **Assigned To**: *(solo developer + AI-assisted development — no per-task assignment needed)*
 
 ---
@@ -40,13 +40,17 @@ RAID log and tech debt register reviewed (step 6a) — both empty, nothing to pu
 | 3 | T-003 | Scaffold NestJS backend app | M | Done | |
 | 4 | T-004 | Scaffold Next.js frontend app | M | Done | |
 | 5 | T-005 | Initialize Prisma schema + local dev PostgreSQL database | M | Done | |
-| 6 | T-006 | Configure environment variable templates (`.env.example`) | S | Available | |
-| 7 | T-007 | Configure ESLint + Prettier + TypeScript strict mode (both apps) | M | Available | |
-| 8 | T-008 | Wire Tailwind CSS + shadcn/ui + design tokens into frontend | M | Available | |
-| 9 | T-009 | Set up GitHub Actions CI pipeline (lint/typecheck/test/build gates) | M | Available | |
-| 10 | T-010 | Configure `main` branch protection rules | S | Available | |
-| 11 | T-011 | Scaffold authentication (JWT strategy, Guards skeleton) | M | Available | |
-| 12 | T-012 | Verify full local dev loop (backend + frontend + Postgres + Redis running together) | S | Available | |
+| 6 | T-006 | Configure environment variable templates (`.env.example`) | S | Done | |
+| 7 | T-007 | Configure ESLint + Prettier + TypeScript strict mode (both apps) | M | Done | |
+| 8 | T-008 | Wire Tailwind CSS + shadcn/ui + design tokens into frontend | M | Done | |
+| 9 | T-009 | Set up GitHub Actions CI pipeline (lint/typecheck/test/build gates) | M | Done | |
+| 10 | T-010 | Configure `main` branch protection rules | S | Done | |
+| 11 | T-011 | Scaffold authentication (JWT strategy, Guards skeleton) | M | Done | |
+| 12 | T-012 | Verify full local dev loop (backend + frontend + Postgres + Redis running together) | S | Done | |
+
+Note: T-012 — Postgres, backend dev server, frontend dev server, and Redis (via Docker container
+`lbm-erp-redis`, port 6380 — Memurai install failed on this machine, unrelated system issue) all
+verified working together (2026-08-17). See `task-list.md` for detail.
 
 Full task detail (source references, exact file/folder footprint, per-task dependency): `task-list.md`.
 

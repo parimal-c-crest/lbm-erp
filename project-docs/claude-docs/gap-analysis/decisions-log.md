@@ -3849,3 +3849,161 @@ product needing Git Flow's heavier branching.
 **Consequences**: `6-development/4-git-workflow.md` and `6-development/9-ci-cd.md` (this same batch)
 use GitHub Actions for CI/CD and GitHub's own PR/branch-protection mechanisms throughout, not a
 platform-agnostic placeholder.
+
+---
+
+## ADR-182: EPIC-002 (Platform Administration) scope — narrowed to FEAT-015's original 4 capabilities
+
+**Context**: EPIC-002/FEAT-015 ("Skeleton Control Panel") was about to get its first real design pass
+(no dedicated docs existed yet — it generates its own documentation outside the per-module JIT cycle,
+`1-project/3-feature-breakdown.md` §10 note). Decisions-log research surfaced that ADR-056/057/058/
+059/060/061/062/065/066/070/072 collectively describe a much larger set of skeleton-control-panel
+capabilities (migrations, cron, Super Admin, plus update manager, maintenance/lock, pre-deploy
+backup, live-to-testing clone) than what `task-list.md`/`3-feature-breakdown.md` actually committed
+EPIC-002/FEAT-015 to build.
+
+**Decision**: EPIC-002 scope stays narrow — exactly the 4 capabilities already named in
+`task-list.md`'s EPIC-002 description and `3-feature-breakdown.md`'s FEAT-015 row: **tenant
+provisioning, migration fanout, Super Admin accounts, cron/job management**. Update Manager
+(ADR-060), maintenance mode/lock (ADR-061/062), pre-deploy backup (ADR-065), and live-to-testing
+clone (ADR-066) are real, already-decided capabilities but not part of this epic — they get their own
+future epic(s) when scheduled, the same deferred-not-missed treatment as StoreTransfer (ADR-144).
+
+**Consequences**: EPIC-002's eventual `docs-kit/`-equivalent design doc and task list cover only the
+4 named capabilities. The other ADRs remain valid, locked decisions for whenever their own epic is
+scheduled — not re-litigated, just not built now.
+
+---
+
+## ADR-183: EPIC-002 — dynamic per-tenant datasource resolution mechanism (resolves ADR-056's open item)
+
+**Context**: ADR-056 locked database-per-tenant but explicitly flagged "Prisma + NestJS needs a
+genuine per-tenant dynamic datasource/connection-routing strategy, resolved at request time from the
+subdomain" as an unresolved blocking follow-up. EPIC-002's design pass is the first point this
+actually needs answering — every future module's backend work (M3 onward) depends on this existing
+first.
+
+**Decision**: A NestJS middleware reads the inbound request's `Host` header, extracts the subdomain,
+and looks up the tenant's connection string from `TenantRegistry` (a table living only in the
+skeleton database, always connected). The middleware resolves/creates a `PrismaClient` for that
+tenant using `@prisma/adapter-pg` (already a backend dependency, added during T-005's Prisma init)
+wrapping a `pg.Pool` — no new package needed, this is exactly the scenario the adapter pattern
+exists for. Resolved clients are cached/reused per tenant (not reconnected every request) and
+attached to request-scoped context via `AsyncLocalStorage`, replacing today's single global
+`PrismaService` with a tenant-scoped equivalent.
+
+**Consequences**: `backend/src/prisma/prisma.service.ts` (T-005) changes from a single static-URL
+client to a per-tenant resolver built on this middleware. Every future module's data-access code
+reads the current tenant's client from request context rather than importing one global instance.
+Local dev needs its own tenant registry seeded with at least skeleton + one real local tenant
+database to exercise this for real (see ADR-184).
+
+---
+
+## ADR-184: EPIC-002 — local dev tenant topology (skeleton database renamed/separated from `lbm_erp_dev`)
+
+**Context**: T-005 created one local Postgres database, `lbm_erp_dev`, as the single fixed
+`DATABASE_URL` target for local development — reasonable before database-per-tenant routing existed,
+but incompatible with it now that ADR-183 requires a real skeleton database plus at least one real
+tenant database to prove multi-tenant routing actually works locally, not mocked.
+
+**Decision**: Skeleton becomes its own dedicated local database, `lbm_erp_skeleton` — holds
+`TenantRegistry` plus the schema/seed-data clone source (ADR-056). The existing `lbm_erp_dev`
+database (T-005) is repurposed as the first example/demo tenant rather than reused as skeleton
+itself, keeping the "skeleton is a template, not a real tenant" distinction real even in local dev.
+A second local tenant database is created through the actual provisioning flow (not manually) during
+EPIC-002's own implementation/verification, to prove the end-to-end flow works, not just the skeleton
+half of it.
+
+**Consequences**: `backend/.env`/`.env.example` gain a distinct skeleton connection variable
+alongside the per-tenant-resolved ones; `lbm_erp_dev`'s existing local data (currently empty — no
+models exist yet) is unaffected by the rename-in-role since no schema/migrations have been applied to
+it yet. `6-development/1-development-environment.md` §9/§11 get updated at EPIC-002's own
+documentation-generation step to describe this topology, not re-decided here.
+
+---
+
+## ADR-185: EPIC-002 — minimal bootstrap `users` table now, Users module (M3) extends it
+
+**Context**: ADR-057 requires a Super Admin user row auto-created at tenant provisioning time, but
+the real Users module (full schema, roles/permissions) isn't built until M3 — three milestones after
+EPIC-002 (M1). Provisioning can't skip Super Admin bootstrap (it's the only way to first log into a
+newly created tenant) but also can't wait for M3.
+
+**Decision**: EPIC-002 adds a minimal `users` table to the shared Prisma schema now — just enough
+fields to support login and Super Admin bootstrap: `id` (UUID), `email`, `password_hash`, `role`,
+`is_super_admin`, plus the standard audit columns from ADR-005/073 (`created_at`/`updated_at`,
+`created_by`/`updated_by` — nullable, self-referential on the bootstrap row itself —,
+`is_deleted`/`deleted_at`). No `tenant_id` (ADR-073 — isolation is physical, this table lives inside
+each tenant's own database). Users module (M3) **extends** this same table with its full field set
+(per its own JIT-generated schema) rather than replacing it, avoiding rework or a data-migration step
+at M3 time.
+
+**Consequences**: `prisma/schema.prisma` gains a `User` model at EPIC-002's implementation step, ahead
+of Users module's own M3 schema work. Users module's own `5-modules/users/4-schema.md` (JIT,
+generated at M3) must explicitly reference this as an extension of an existing table, not a
+from-scratch design — flagged here so that document's generation doesn't contradict this decision.
+
+---
+
+## ADR-186: Users — Role hierarchy (parent/child + depth) kept, not flattened
+
+**Context**: Legacy's Role entity is a self-referencing hierarchy (`H2`/President root, computed
+nesting depth, drag-and-drop reparenting UI). When `5-modules/users/` was first drafted, the module's
+own author proposed flattening Role to a plain list (just ADR-002's 5 confirmed roles, no
+parent/child) on the reasoning that no SoT source or ADR required org-chart-shaped nesting for MVP.
+Developer reviewed this proposal and rejected it.
+
+**Decision**: The Role hierarchy is kept — `parent_role_id`/`depth` remain real columns, seeded with
+ADR-002's 5 tenant-facing roles as an initial flat layer, reparentable by Admin via the same
+drag-and-drop interaction the legacy system had.
+
+**Consequences**: `5-modules/users/4-schema.md` keeps `parent_role_id`/`depth` on the `roles` table.
+`5-modules/users/9-ui.md` keeps the Role hierarchy tree picker and drag-and-drop reparenting screen.
+`5-modules/users/2-functional-specification.md` FR-003 includes a Reparent flow.
+
+---
+
+## ADR-187: Users — separate `Username` field added, distinct from Email, as the real login identifier
+
+**Context**: `3-api/2-authentication.md` (already approved) currently documents "Email & Password" as
+the login mechanism — a decision made before the Users module's own JIT documentation cycle started
+and before anyone checked whether the legacy system's own `Username`/`Email` split should carry
+forward. Legacy has both fields, distinct, with Username as the actual login identifier. When
+`5-modules/users/` was first drafted, the module's own author defaulted to email-only (matching the
+already-shipped bootstrap `users` table and the T-016 login screen, both email-only). Developer
+reviewed this and asked for the separate Username field back.
+
+**Decision**: A distinct `username` column is added to `users` — unique, required, the real login
+identifier. `email` remains a separate, also-unique, also-required field (contact/notification use,
+not login).
+
+**Consequences**: **Supersedes `3-api/2-authentication.md`'s current "Email & Password" framing** —
+that document needs a follow-up amendment (out of scope for this ADR/this module's own review pass)
+to read "Username & Password." `5-modules/users/4-schema.md` adds `users.username` (unique). The
+already-shipped bootstrap `users` table (ADR-185, email-only) and the T-016 login screen (built
+mock-only, pre-Users-module) both need a follow-up migration/UI update when the real Users module is
+implemented at M3 — not immediately, since T-016 is mock auth on a milestone that's already shipped,
+but flagged here so it isn't lost. `5-modules/users/8-api.md`'s `LoginDto` uses `username`, not
+`email`.
+
+---
+
+## ADR-188: Users — NotificationScheduler/WordTemplate are backend/API-only, no dedicated UI
+
+**Context**: `6-implementation-plan/1-implementation-plan.md`'s per-module re-run for Users (task-list
+traceability check, step 4a) found `NotificationScheduler` and `WordTemplate` have schema entities
+(`5-modules/users/4-schema.md`) and a backend-work mention (`10-implementation-plan.md` Phase 9), but
+**no endpoint in `8-api.md`'s API Summary and no screen in `9-ui.md`'s 22-screen inventory** — unlike
+Mail Account, which has both. Not a stated scope-exclusion (unlike Sharing Rules, ADR-081, or payroll
+export, ADR-078), so routed to the developer rather than silently built or dropped.
+
+**Decision**: build minimal backend CRUD for both (per schema, as `10-implementation-plan.md` Phase 9
+already names) with no dedicated UI screen in this MVP — API-only/admin-tool access. Matches what the
+implementation plan actually scoped; no `8-api.md`/`9-ui.md` amendment needed since neither claimed
+these features in the first place.
+
+**Consequences**: `task-list.md` T-060 stays as drafted (Mail Account + NotificationScheduler +
+WordTemplate backend, Mail Account only wired to a UI task, T-043). No UI task added for the other
+two. If a UI is wanted later, it's a `12-maintenance/2-feature-request.md` addition, not part of this
+module's MVP build.

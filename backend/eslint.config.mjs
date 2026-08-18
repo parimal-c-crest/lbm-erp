@@ -4,12 +4,15 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+import sharedBase from '../eslint.base.mjs';
+
 export default tseslint.config(
   {
     ignores: ['eslint.config.mjs'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
+  ...sharedBase,
   eslintPluginPrettierRecommended,
   {
     languageOptions: {
