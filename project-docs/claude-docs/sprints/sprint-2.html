@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LBM ERP Rewrite — Sprint 2</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-2: #f1f5f9;
+    --border: #e2e8f0;
+    --text: #111c2d;
+    --text-muted: #55606f;
+    --primary: #2563eb;
+    --green: #10b981;
+    --green-bg: #ecfdf5;
+    --blue: #2563eb;
+    --blue-bg: #eff6ff;
+    --grey: #64748b;
+    --grey-bg: #f1f5f9;
+    --amber: #b45309;
+    --amber-bg: #fffbeb;
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 6px -1px rgba(0,0,0,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-2: #263143;
+      --border: #334155;
+      --text: #ecf1ff;
+      --text-muted: #99a3b3;
+      --primary: #7fa4ff;
+      --green: #34d399;
+      --green-bg: #052e22;
+      --blue: #7fa4ff;
+      --blue-bg: #0f2247;
+      --grey: #94a3b8;
+      --grey-bg: #1e293b;
+      --amber: #fbbf24;
+      --amber-bg: #3a2a05;
+      --red: #f87171;
+      --red-bg: #3a0d0d;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 6px -1px rgba(0,0,0,0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  .wrap {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+  }
+  header {
+    margin-bottom: 28px;
+  }
+  .eyebrow {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .goal {
+    font-size: 15px;
+    color: var(--text-muted);
+    max-width: 640px;
+    margin: 0 0 14px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+  }
+  .badge.status-not-started { background: var(--grey-bg); color: var(--grey); border-color: transparent; }
+  .badge.status-in-progress { background: var(--blue-bg); color: var(--blue); border-color: transparent; }
+  .badge.status-done { background: var(--green-bg); color: var(--green); border-color: transparent; }
+  .badge.status-blocked { background: var(--red-bg); color: var(--red); border-color: transparent; }
+  .timestamp {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 18px 16px;
+    box-shadow: var(--shadow);
+  }
+  .tile .num {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .tile .label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 8px;
+  }
+  .tile .sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .tile.progress .num { color: var(--green); }
+  .tile.inprogress .num { color: var(--blue); }
+  .tile.blocked .num { color: var(--red); }
+  .tile.available .num { color: var(--grey); }
+
+  section.tasks {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  .section-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    text-align: left;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  .task-id {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-weight: 600;
+    color: var(--primary);
+    white-space: nowrap;
+  }
+  .est {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .status-pill {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .status-pill.available { background: var(--grey-bg); color: var(--grey); }
+  .status-pill.claimed { background: var(--amber-bg); color: var(--amber); }
+  .status-pill.in-progress { background: var(--blue-bg); color: var(--blue); }
+  .status-pill.blocked { background: var(--red-bg); color: var(--red); }
+  .status-pill.done { background: var(--green-bg); color: var(--green); }
+  .status-pill.cancelled { background: var(--grey-bg); color: var(--text-muted); text-decoration: line-through; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+  }
+  .legend .dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .dot.done { background: var(--green); }
+  .dot.inprogress { background: var(--blue); }
+  .dot.blocked { background: var(--red); }
+  .dot.available { background: var(--grey); }
+  .dot.claimed { background: var(--amber); }
+  .dot.cancelled { background: var(--text-muted); }
+
+  .note {
+    background: var(--amber-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 24px;
+  }
+  .note strong { color: var(--amber); }
+
+  footer {
+    font-size: 11px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">LBM ERP Rewrite &middot; Milestone M1 &middot; Epic EPIC-002</p>
+    <h1>Sprint 2 &mdash; Platform Administration (Skeleton Control Panel)</h1>
+    <p class="goal">Build the cross-tenant infrastructure EPIC-001 was missing before M1 can be
+      marked Complete: tenant registry + dynamic per-tenant routing, tenant provisioning, migration
+      fanout, and cron/job management.</p>
+    <div class="meta-row">
+      <span class="badge status-in-progress">Sprint Status: In Progress</span>
+      <span class="badge">Milestone: M1 &mdash; Environment Setup (In Progress)</span>
+      <span class="badge">Epic: EPIC-002 &mdash; Platform Administration</span>
+      <span class="timestamp">Generated 2026-08-17</span>
+    </div>
+  </header>
+
+  <div class="tiles">
+    <div class="tile progress">
+      <div class="num">71%</div>
+      <div class="label">Sprint Progress</div>
+      <div class="sub">5 of 7 tasks Done</div>
+    </div>
+    <div class="tile inprogress">
+      <div class="num">0</div>
+      <div class="label">In Progress</div>
+      <div class="sub">no tasks currently claimed/in progress</div>
+    </div>
+    <div class="tile blocked">
+      <div class="num">0</div>
+      <div class="label">Blocked</div>
+      <div class="sub">no blocked tasks</div>
+    </div>
+    <div class="tile available">
+      <div class="num">2</div>
+      <div class="label">Available</div>
+      <div class="sub">2 tasks unclaimed, ready in dependency order</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Process note:</strong> T-013 (EPIC-003/M2 &mdash; sidebar shell) was already built before
+    this sprint was formally planned, out of the normal milestone sequence (M2 isn't supposed to
+    start until M1 is <code>Released</code>). Documented here rather than hidden &mdash; it stands as
+    a completed exception, not undone.
+  </div>
+
+  <section class="tasks">
+    <div class="section-head">Tasks (dependency order)</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:70px">ID</th>
+          <th>Description</th>
+          <th style="width:70px">Estimate</th>
+          <th style="width:110px">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="task-id">T-022</td>
+          <td>Add <code>TenantRegistry</code> + minimal bootstrap <code>User</code> Prisma models; local skeleton/tenant DB topology</td>
+          <td class="est">M</td>
+          <td><span class="status-pill done">Done</span></td>
+        </tr>
+        <tr>
+          <td class="task-id">T-023</td>
+          <td>Build tenant-resolution middleware + per-tenant cached <code>PrismaClient</code></td>
+          <td class="est">L</td>
+          <td><span class="status-pill done">Done</span></td>
+        </tr>
+        <tr>
+          <td class="task-id">T-024</td>
+          <td>Build tenant provisioning flow</td>
+          <td class="est">M</td>
+          <td><span class="status-pill done" title="Empty CREATE DATABASE + migrate deploy, not TEMPLATE clone (active-connection restriction) — see task-list.md">Done</span></td>
+        </tr>
+        <tr>
+          <td class="task-id">T-025</td>
+          <td>Build migration fanout script</td>
+          <td class="est">M</td>
+          <td><span class="status-pill done">Done</span></td>
+        </tr>
+        <tr>
+          <td class="task-id">T-026</td>
+          <td>Build cron/job management backend</td>
+          <td class="est">L</td>
+          <td><span class="status-pill done">Done</span></td>
+        </tr>
+        <tr>
+          <td class="task-id">T-027</td>
+          <td>Build skeleton control panel UI</td>
+          <td class="est">L</td>
+          <td><span class="status-pill done">Done</span></td>
+        </tr>
+        <tr>
+          <td class="task-id">T-028</td>
+          <td>Verify end-to-end (real 2nd tenant, migration fanout, cron panel)</td>
+          <td class="est">S</td>
+          <td><span class="status-pill done">Done</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="legend">
+    <span><span class="dot done"></span>Done / Complete</span>
+    <span><span class="dot inprogress"></span>In Progress</span>
+    <span><span class="dot blocked"></span>Blocked</span>
+    <span><span class="dot available"></span>Available / Not Started</span>
+    <span><span class="dot claimed"></span>Claimed</span>
+    <span><span class="dot cancelled"></span>Cancelled</span>
+  </div>
+
+  <footer>
+    Generated by <code>7-sprint-planning/3-generate-sprint-page.md</code> from <code>sprint-2.md</code>
+    and its referenced task/epic files &middot; re-run any time for a current view. This is a
+    Claude-run, on-demand regeneration &mdash; not an automated pipeline.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -33,9 +33,11 @@ built around a persistent left sidebar exposing the 10 top-level areas a logged-
 can reach, gated by the 6-role catalog locked in `1-project/2-requirements.md` §5 (ADR-002).
 
 - **Navigation philosophy**: flat and shallow. Most work happens 1-2 clicks from the sidebar —
-  list → detail/create, with no deep nested menu trees. Internal-only, multi-writer read-model
-  modules (SearchLineItem, PurchaseLineItem) have no navigation entry point at all; they are backend
-  data, never a screen a user opens directly.
+  list → detail/create. A top-level item may expand into a one-level submenu (chevron
+  expand/collapse, children indented below it) when its own module's UI-Design step decides it needs
+  one — not assumed globally, and never more than one level deep (ADR-189). Internal-only,
+  multi-writer read-model modules (SearchLineItem, PurchaseLineItem) have no navigation entry point at
+  all; they are backend data, never a screen a user opens directly.
 - **UX goals**: minimize clicks for the highest-frequency ERP tasks (order entry, receiving,
   looking up stock), keep the active module always visible, never hide a role's own workflow behind
   another module's menu.

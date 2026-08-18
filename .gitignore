@@ -11,3 +11,8 @@ coverage/
 *.tsbuildinfo
 
 backend/src/generated/
+
+# Playwright (ADR-027)
+/playwright-report/
+/test-results/
+/blob-report/

@@ -13,8 +13,12 @@ consistent with the default JIT flow. Non-module epics whose source docs are alr
 (`docs-kit/5-modules/users/`) is the first module whose 11-document set is fully generated and
 approved (2026-08-18) — Design Status set to `Approved` for both its epics (EPIC-004/005), SoT
 folded in (`sot-docs/index.md`, 2026-08-18), and its real task list now derived: 36 tasks (T-029
-through T-064) across EPIC-004 (UI Design) and EPIC-005 (Backend/API) — see `task-list.md`. Every
-other module epic remains `TBD`.
+through T-064) across EPIC-004 (UI Design) and EPIC-005 (Backend/API) — see `task-list.md`. UOM
+(`docs-kit/5-modules/uom/`) is the second module through this gate (2026-08-18, 11 documents incl.
+the ADR-190/191/192 amendment rounds already folded in) — its real task list is now derived too: 18
+tasks (T-065 through T-082) across EPIC-010 (UI Design) and EPIC-011 (Backend/API) — see
+`task-list.md`. Design Status stays blank for both (task derivation alone doesn't start design
+work). Every other module epic remains `TBD`.
 
 ---
 
@@ -31,14 +35,15 @@ other module epic remains `TBD`.
 
 ## Module epics — UI Design (Milestone 2)
 
-Every row: task list `TBD — awaiting just-in-time module documentation`.
+Every row except EPIC-004/005 (Users) and EPIC-010/011 (UOM) below: task list
+`TBD — awaiting just-in-time module documentation`.
 
 | ID | Epic | Module Slug | Status | Design Status |
 |----|------|-------------|--------|----------------|
-| EPIC-004 | Users — UI Design | `users` | Complete* | Approved* |
+| EPIC-004 | Users — UI Design | `users` | Complete | Approved |
 | EPIC-006 | Location — UI Design | `location` | Not Started | blank |
 | EPIC-008 | Products — UI Design | `products` | Not Started | blank |
-| EPIC-010 | UOM — UI Design | `uom` | Not Started | blank |
+| EPIC-010 | UOM — UI Design | `uom` | Complete | Approved |
 | EPIC-012 | Vendors — UI Design | `vendors` | Not Started | blank |
 | EPIC-014 | Pricing — UI Design | `pricing` | Not Started | blank |
 | EPIC-016 | Accounts — UI Design | `accounts` | Not Started | blank |
@@ -51,22 +56,30 @@ Every row: task list `TBD — awaiting just-in-time module documentation`.
 | EPIC-030 | Account Statement — UI Design | `account-statement` | Not Started | blank |
 | EPIC-032 | Settings — UI Design | `settings` | Not Started | blank |
 
-\* EPIC-004: all 17 tasks Done, but the Design-First Strategy's real developer live-browser
-review/sign-off never ran — see `raid-log.md` R-004. Treat as functionally complete, not
-developer-approved, until that review happens.
+\* EPIC-004: all 17 tasks Done. The Design-First Strategy's real developer live-browser
+review/sign-off (`raid-log.md` R-004) ran this session — same review pass that produced ADR-193
+(icon-only row actions) and ADR-194 (bordered-card form sections), both applied to Users' pages
+too, not just UOM's. R-003/R-004 closed.
+
+† EPIC-010: all 8 tasks (T-065–T-072, `task-list.md`) Done — every UOM screen built against the
+shared `frontend/src/lib/mock-data/uom.ts` fixture, real inter-page navigation verified. Developer's
+own live-browser review ran this session (multiple rounds — row-action icons/ADR-193, form-section
+cards/ADR-194, column/tab renames, layout width fixes) and design is confirmed Approved
+2026-08-18 — Complete per the Module Design-First Strategy's rollup rule.
 
 ---
 
 ## Module epics — Backend/API (Milestones 3-9)
 
-Every row: task list `TBD — awaiting just-in-time module documentation`.
+Every row except EPIC-005 (Users) and EPIC-011 (UOM) below: task list
+`TBD — awaiting just-in-time module documentation`.
 
 | ID | Epic | Module Slug | Milestone | Status | Design Status |
 |----|------|-------------|-----------|--------|----------------|
-| EPIC-005 | Users — Backend/API | `users` | M3 | In Progress | Approved* |
+| EPIC-005 | Users — Backend/API | `users` | M3 | Complete | Approved* |
 | EPIC-007 | Location — Backend/API | `location` | M3 | Not Started | blank |
 | EPIC-009 | Products — Backend/API | `products` | M3 | Not Started | blank |
-| EPIC-011 | UOM — Backend/API | `uom` | M3 | Not Started | blank |
+| EPIC-011 | UOM — Backend/API | `uom` | M3 | Complete | Approved |
 | EPIC-013 | Vendors — Backend/API | `vendors` | M4 | Not Started | blank |
 | EPIC-015 | Pricing — Backend/API | `pricing` | M4 | Not Started | blank |
 | EPIC-017 | Accounts — Backend/API | `accounts` | M5 | Not Started | blank |
@@ -79,6 +92,33 @@ Every row: task list `TBD — awaiting just-in-time module documentation`.
 | EPIC-031 | Account Statement — Backend/API | `account-statement` | M8 | Not Started | blank |
 | EPIC-033 | Settings — Backend/API | `settings` | M9 | Not Started | blank |
 
+† EPIC-011: real 10-task breakdown derived (T-073–T-082, `task-list.md`) from UOM's approved JIT
+documentation set (superseded by the ‡ note below — all 10 tasks are now `Done`).
+
+‡ EPIC-011: all 10 tasks (T-073–T-082) `Done` — real backend built, 20/20 e2e tests passing against
+real Postgres/Redis (`pnpm --filter backend run test:e2e -- uom.e2e-spec.ts`). Real browser
+click-through (Playwright, real dev token + `X-Tenant-Subdomain: demo`) run this session across
+Groups List, Group Detail, Categories, Types, Functional Roles, and Add Group — found and fixed one
+real bug in the process: `GET /uom/groups`'s list summary never included nested `roleAssignments`
+(by design, per `8-api.md`'s own "summary, not full detail" spec), but the Group List page read
+`group.roleAssignments.length` for its "UOM Roles" column, crashing the whole page (React error
+boundary, `TypeError: Cannot read properties of undefined`). Fixed by adding a real
+`roleAssignmentCount` field to the list summary (`groups.service.ts`'s `list()`, via Prisma
+`_count`) and updating the frontend to a proper `UOMGroupSummary` type instead of a mis-typed reuse
+of the full `UOMGroup` detail shape (`frontend/src/types/uom.ts`, `lib/api/uom.ts`,
+`settings/uom/groups/page.tsx`); `8-api.md`'s `GET /uom/groups` response description updated to
+document the field. Re-verified clean after the fix — all 6 pages render real backend data
+correctly, no console errors.
+
+**Known, deliberately-deferred limitation** (not a bug): the demo seed's "transaction-locked" Group
+("Bagged Concrete Mix") renders fully editable, not locked — `isGroupLocked()` currently always
+returns `false` since no consumer module (SalesOrder/PurchaseOrder/etc.) exists yet to hold a real
+`uom_group_id` reference to check against. The lock logic and its `GROUP_LOCKED` 409 response are
+real and tested at the unit/e2e level; only the "is anything actually referencing this Group"
+signal is a stub (`groups.service.ts` `isGroupLocked()`, TODO comment names exactly which future
+modules need to register a check there). Correct given build order — UOM (M3) ships before any
+transactional module (M6+) — not something to fix now.
+
 ---
 
 # Revision History
@@ -89,5 +129,8 @@ Every row: task list `TBD — awaiting just-in-time module documentation`.
 | 2026-08-18 | EPIC-004/005 (Users) Design Status set to `Approved` — full 11-document JIT set generated, reviewed against 14 pre-existing Users-specific ADRs, corrected, and promoted to `docs-kit/5-modules/users/`. |
 | 2026-08-18 | EPIC-004/005 (Users) real task list derived — 36 tasks (T-029–T-064), scoped re-run of `6-implementation-plan/1-implementation-plan.md` steps 2-6/8. See `task-list.md`. |
 | 2026-08-18 | EPIC-004 status set to `In Progress` — T-029 Done (Sprint 3's first task). |
-| 2026-08-18 | EPIC-004 status set to `Complete*` — all 17 Sprint 3 tasks Done; starred because the Design-First live-review gate didn't run (R-004). |
+| 2026-08-18 | EPIC-004 status set to `Complete*` — all 17 Sprint 3 tasks Done; starred because the Design-First live-review gate didn't run yet (R-004). |
+| 2026-08-18 | EPIC-004 Design Status confirmed `Approved` for real — the developer's live-browser review actually ran this session (R-003/R-004 closed), producing ADR-193/194 which were applied to both Users and UOM. Star removed from both Status and Design Status. |
 | 2026-08-18 | EPIC-005 status set to `In Progress` — Sprint 4 (T-046–T-054, the RBAC foundation) Done, started out of sequence while M2 isn't complete (R-004). T-055 onward not yet built. |
+| 2026-08-18 | EPIC-005 status set to `Complete` — all 19 tasks (T-046–T-064) Done: Time Clock, Payroll, Personal Days/Holidays, Login History, QuickBooks sync, Mail Account/Notification Scheduler/Word Template, Barcode Labels, seed data, the project's first concurrent-edit lock utility, and OpenAPI docs. 17 e2e suites / 61 tests, all real (skeleton Postgres + Redis), no mocks. Two real doc/schema gaps found and resolved along the way, both flagged in `raid-log.md` (R-005 Holiday/HolidayAssignment, R-006 UserNotificationPreference backend never scoped). Still out of sequence vs M2 (R-004 unresolved — the Design-First live-review gate for EPIC-004's UI never ran). |
+| 2026-08-18 | EPIC-010/011 (UOM) real task list derived — 18 tasks (T-065–T-082), module-scoped re-run of `6-implementation-plan/1-implementation-plan.md` steps 2-6/8, replacing the `TBD` placeholder. Status stays `Not Started` for both (no task started). See `task-list.md`. |

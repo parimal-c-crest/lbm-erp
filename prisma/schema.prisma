@@ -68,15 +68,16 @@ model User {
   isDeleted        Boolean    @default(false) @map("is_deleted")
   deletedAt        DateTime?  @map("deleted_at")
 
-  role              Role?                        @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  hrProfile         UserHrProfile?
-  preference        UserPreference?
-  notificationPrefs UserNotificationPreference[]
-  groupMemberships  GroupMembership[]
-  timeClockRecords  TimeClockRecord[]
-  personalDays      PersonalDay[]
-  quickBooksSync    QuickBooksSyncPointer?
-  mailAccount       MailAccount?
+  role               Role?                        @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  hrProfile          UserHrProfile?
+  preference         UserPreference?
+  notificationPrefs  UserNotificationPreference[]
+  groupMemberships   GroupMembership[]
+  timeClockRecords   TimeClockRecord[]
+  personalDays       PersonalDay[]
+  holidayAssignments HolidayAssignment[]
+  quickBooksSync     QuickBooksSyncPointer?
+  mailAccount        MailAccount?
 
   createdByUser User?  @relation("UserCreatedBy", fields: [createdBy], references: [id])
   updatedByUser User?  @relation("UserUpdatedBy", fields: [updatedBy], references: [id])
@@ -296,6 +297,35 @@ model PersonalDay {
   @@map("personal_days")
 }
 
+// System-wide holiday catalog (`4-schema.md` §3 "Holiday / HolidayAssignment") — added at T-057;
+// `4-schema.md` §4 never carried column-level detail for this pair (a pre-existing doc gap, not
+// silently worked around — flagged in this task's todos), so the shape below is this task's own
+// minimal design: a named calendar date, no per-tenant recurrence rule (out of MVP scope, no SoT
+// source names one).
+model Holiday {
+  id   String   @id @default(uuid())
+  name String
+  date DateTime @db.Date
+
+  assignments HolidayAssignment[]
+
+  @@unique([name, date])
+  @@map("holidays")
+}
+
+// Per-user observed-date assignment — which employees actually observe a given catalog holiday.
+model HolidayAssignment {
+  id        String @id @default(uuid())
+  holidayId String @map("holiday_id")
+  userId    String @map("user_id")
+
+  holiday Holiday @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([holidayId, userId])
+  @@map("holiday_assignments")
+}
+
 // `username` is text, not a FK — legacy matches by string, preserved deliberately (Known Gaps,
 // `4-schema.md` §4).
 model LoginHistory {
@@ -403,6 +433,171 @@ model JobSchedule {
 
   @@unique([jobDefinitionId, tenantSubdomain])
   @@map("job_schedules")
+}
+
+// UOM module (M3, EPIC-011) — admin-manageable reference-data hierarchy + conversion arithmetic's
+// own data, per `docs-kit/5-modules/uom/4-schema.md`. Every other module resolves UOM exclusively
+// through UOM's own service (BR-015/ADR-053), never a direct join into these tables. No `tenant_id`
+// (ADR-073, database-per-tenant). `uom_groups.name`'s case-insensitive uniqueness (BR-001/ADR-191)
+// is a functional index added via raw SQL in the migration (Prisma has no native functional-index
+// support) — see the migration's own comment.
+model UOMCategory {
+  id        String    @id @default(uuid())
+  name      String
+  sortOrder Int?      @map("sort_order")
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by")
+  updatedBy String?   @map("updated_by")
+
+  types  UOMType[]
+  groups UOMGroup[]
+
+  @@map("uom_categories")
+}
+
+model UOMType {
+  id         String    @id @default(uuid())
+  name       String
+  categoryId String?   @map("category_id")
+  sortOrder  Int?      @map("sort_order")
+  isDeleted  Boolean   @default(false) @map("is_deleted")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by")
+  updatedBy  String?   @map("updated_by")
+
+  category UOMCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  baseGroups        UOMGroup[]
+  roleAssignments   UOMRoleAssignment[]
+  conversionFactors UOMConversionFactor[]
+  factorHistory     UOMTypeFactorHistory[]
+  pickingHierarchy  UOMPickingHierarchy[]
+
+  @@map("uom_types")
+}
+
+model UOMFunctionalRole {
+  id        String    @id @default(uuid())
+  name      String
+  sortOrder Int?      @map("sort_order")
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by")
+  updatedBy String?   @map("updated_by")
+
+  roleAssignments UOMRoleAssignment[]
+
+  @@map("uom_functional_roles")
+}
+
+// `name` uniqueness is case-insensitive (BR-001/ADR-191) — enforced by a functional index on
+// `lower(name)` added via raw SQL in the migration, not by `@@unique([name])` here (Prisma cannot
+// express a functional/expression index). "Uses Picking Hierarchy" is deliberately NOT a column
+// here (ADR-192/BR-013) — computed at read time from `pickingHierarchy` row existence.
+model UOMGroup {
+  id         String    @id @default(uuid())
+  name       String
+  categoryId String?   @map("category_id")
+  baseTypeId String    @map("base_type_id")
+  isDeleted  Boolean   @default(false) @map("is_deleted")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by")
+  updatedBy  String?   @map("updated_by")
+
+  category UOMCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  baseType UOMType      @relation(fields: [baseTypeId], references: [id], onDelete: Restrict)
+
+  roleAssignments   UOMRoleAssignment[]
+  conversionFactors UOMConversionFactor[]
+  factorHistory     UOMTypeFactorHistory[]
+  pickingHierarchy  UOMPickingHierarchy[]
+
+  @@map("uom_groups")
+}
+
+model UOMRoleAssignment {
+  id        String   @id @default(uuid())
+  groupId   String   @map("group_id")
+  roleId    String   @map("role_id")
+  typeId    String   @map("type_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by")
+  updatedBy String?  @map("updated_by")
+
+  group UOMGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  role  UOMFunctionalRole @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  type  UOMType           @relation(fields: [typeId], references: [id], onDelete: Restrict)
+
+  @@unique([groupId, roleId])
+  @@map("uom_role_assignments")
+}
+
+// `unitsPerBase` CHECK (> 0, whole number) added via raw SQL in the migration (BR-003/BR-004) —
+// Prisma has no native CHECK-constraint syntax at this project's Prisma version.
+model UOMConversionFactor {
+  id            String   @id @default(uuid())
+  groupId       String   @map("group_id")
+  typeId        String   @map("type_id")
+  unitsPerBase  Decimal  @map("units_per_base") @db.Decimal(18, 4)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdBy     String?  @map("created_by")
+  updatedBy     String?  @map("updated_by")
+
+  group UOMGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  type  UOMType  @relation(fields: [typeId], references: [id], onDelete: Restrict)
+
+  @@unique([groupId, typeId])
+  @@map("uom_conversion_factors")
+}
+
+// Append-only (BR-009) — no `updatedAt`/`updatedBy`. Partial unique index on (groupId, typeId)
+// WHERE effectiveTo IS NULL added via raw SQL in the migration (at most one "currently effective"
+// row per pair).
+model UOMTypeFactorHistory {
+  id            String    @id @default(uuid())
+  groupId       String    @map("group_id")
+  typeId        String    @map("type_id")
+  rate          Decimal   @db.Decimal(18, 4)
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  group UOMGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  type  UOMType  @relation(fields: [typeId], references: [id], onDelete: Restrict)
+
+  @@index([groupId, typeId, effectiveFrom])
+  @@map("uom_type_factor_history")
+}
+
+model UOMPickingHierarchy {
+  id        String    @id @default(uuid())
+  groupId   String    @map("group_id")
+  typeId    String    @map("type_id")
+  sortOrder Int       @map("sort_order")
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by")
+  updatedBy String?   @map("updated_by")
+
+  group UOMGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  type  UOMType  @relation(fields: [typeId], references: [id], onDelete: Restrict)
+
+  @@unique([groupId, typeId])
+  @@unique([groupId, sortOrder])
+  @@map("uom_picking_hierarchy")
 }
 
 model JobRun {

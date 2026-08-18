@@ -2264,6 +2264,18 @@ finalize date and the UOM Type reference on each line — no duplicated rate val
 historical rate via the history table's date-range lookup whenever a past transaction is displayed or
 reported on.
 
+> **Amendment (UOM field-extraction pass)**: This Decision's text above reads as versioning the
+> factor-history table at the UOM Type level alone ("versioned at the UOM Type level"), and the
+> Consequences paragraph's column list names only `uom_type_id`. Resolved during UOM's
+> field-extraction pass (`project-docs/claude-docs/analysis/module-field-extraction/uom/`): the
+> factor-history table's actual key is **(Group, Type) together**, matching `UOMConversionFactor`'s
+> own key — a Type-alone key cannot disambiguate two different Groups using the same Type with two
+> different conversion factors. Confirmed with the developer; this amendment records the resolution
+> without rewriting the original Decision/Consequences text above, per this project's convention of
+> keeping superseded/amended ADR content intact for historical traceability. See
+> `uom/entities-and-fields.md` (`UOMTypeFactorHistory`) and `uom/business-rules.md` (UOM-RULE-009)
+> for the corrected field/rule detail.
+
 ---
 
 ## ADR-097: SalesOrder/PurchaseOrder/Store Transfer — per-line UOM override for Qty/Price/Cost (extends ADR-095)
@@ -4007,3 +4019,187 @@ these features in the first place.
 WordTemplate backend, Mail Account only wired to a UI task, T-043). No UI task added for the other
 two. If a UI is wanted later, it's a `12-maintenance/2-feature-request.md` addition, not part of this
 module's MVP build.
+
+---
+
+## ADR-189: Sidebar — top-level nav items may expand into a submenu, generic mechanism
+
+**Context**: `4-ui/1-navigation.md` §14 originally stated the sidebar is "flat and shallow ... no deep
+nested menu trees." Developer discussed adding a submenu to the sidebar in an earlier session; that
+discussion wasn't written down at the time (process miss — should have been captured immediately per
+the confirm-then-write convention) and was lost. Re-raised this session: Users' sidebar entry should
+expand to show its own sub-pages (starting with Create User) rather than link straight to the list.
+
+**Decision**: `NavItem` (`frontend/src/config/nav-items.ts`) gains an optional `children: NavItem[]`.
+An item with children renders as an expand/collapse control (chevron) instead of a direct link; its
+children render indented below it. Parent shows active/highlighted state when the current route
+matches any child. This is a generic, reusable mechanism — not special-cased to Users — but it is
+only populated for modules whose UI has actually been JIT-designed and built. **Users is the only
+module wired with real children today**: "All Users" (`/users`) and "Create User" (`/users/new`). The
+other 9 top-level items stay single-link until their own module's UI-Design epic runs and decides
+what (if anything) belongs as a child — no children are fabricated ahead of that per-module design
+pass.
+
+**Consequences**: `4-ui/1-navigation.md` §14's "no deep nested menu trees" line is superseded — replace
+with a statement that shallow (one-level) expandable submenus are supported per-item, decided at that
+module's own JIT UI-design step, not assumed globally. `Sidebar.tsx`/`SidebarDrawer.tsx` implement the
+expand/collapse control and children rendering. Future modules' `9-ui.md` docs decide their own nav
+children as part of their normal JIT cycle — this ADR only unlocks the mechanism and fixes Users.
+
+---
+
+## ADR-190: UOM — a Group becomes fully immutable and undeletable once referenced by any transaction
+
+**Context**: UOM's field-extraction and 11-doc module set (`docs-kit/5-modules/uom/`) were already
+drafted and reviewed/approved this session with no rule governing whether a UOM Group's definition
+can change after products/orders already depend on it. Developer raised this gap directly: nothing in
+the legacy blueprint, the field-extraction, or any prior ADR stops editing a Group's unit assignments
+or conversion factors — or deleting it outright — after it's already in real use, which would silently
+corrupt the meaning of every past transaction that referenced it.
+
+**Decision**: Once a UOM Group is referenced by **any** transaction (a SalesOrder line, PurchaseOrder
+line, receiving record, or any other transactional consumer — first reference is what triggers the
+lock, not mere assignment to a Product), the Group becomes read-only and undeletable, with **one single
+exception**: **Group Name** stays editable indefinitely, since every reference to a Group is by ID, not
+by name, so renaming has no effect on already-recorded transactions. Locked once transaction-referenced:
+Category, sort order, all eleven role-Type assignments, Base Type, conversion factors
+(`UOMConversionFactor`), and picking-hierarchy rows. Delete is blocked outright, with no exception, once
+referenced — this applies on top of, not instead of, UOM-RULE-014's existing in-use `RESTRICT` delete
+guard (which already blocks Type/Category/Role deletion while referenced by a Group; this decision adds
+the equivalent guard at the Group level itself, closing UOM-FX-OQ-006). If a business need arises for a
+genuinely different conversion (e.g. a supplier repackages a unit), the intended path is creating a
+**new** Group, not editing a locked one.
+
+**Consequences**: `module-field-extraction/uom/business-rules.md` and `docs-kit/5-modules/uom/
+3-business-rules.md` gain a new rule (next sequential ID after UOM-RULE-019) stating this lock
+precisely, including the Name exception. `4-schema.md`/`6-validation.md` need a
+transaction-reference check (e.g. an existence query against every consumer table's `uom_group_id`
+foreign key) enforced at the API layer before allowing any locked-field write or a delete. `8-api.md`'s
+Group update/delete endpoints must reflect the lock (a 409/422-class response when a locked field is
+sent or delete is attempted against a used Group). `9-ui.md`'s Group Detail screen should visibly
+disable locked fields (not just reject on submit) once a Group is in use, with an explanatory message
+rather than a silent failure. `11-testing.md` needs a test case for: editing an unused Group (allowed,
+all fields), editing a used Group's Name only (allowed), editing a used Group's any other field
+(rejected), deleting a used Group (rejected). These already-approved UOM documents are amended in place
+rather than treated as a new draft batch, since this is a targeted rule addition to a just-approved
+module, not a full regeneration.
+
+---
+
+## ADR-191: UOM — Group Name uniqueness is case-insensitive, checked on both create and rename
+
+**Context**: Legacy's Group-name uniqueness check (UOM-RULE-001) is a case-sensitive `SELECT COUNT`,
+never confirmed as a deliberate business requirement rather than an implementation detail
+(`open-questions.md` UOM-FX-OQ-008, Non-blocking). Since ADR-190 keeps Group Name editable
+indefinitely — even on an otherwise-locked, transaction-referenced Group — the uniqueness check's
+timing also needed pinning down explicitly, not just its case-sensitivity.
+
+**Decision**: Group Name uniqueness is **case-insensitive** — "Test" and "test" are the same name,
+the second is rejected as a duplicate. The check runs on **both** create and rename (every write to
+Name, not just initial creation) — since Name stays editable per ADR-190, a rename must be checked
+the same as a create to prevent a duplicate being introduced later.
+
+**Consequences**: `module-field-extraction/uom/business-rules.md` and `docs-kit/5-modules/uom/
+3-business-rules.md`'s UOM-RULE-001/BR-001 are amended to state case-insensitive comparison and
+explicitly cover rename, not just create. `6-validation.md`'s corresponding validation rule is
+updated the same way. `4-schema.md` should note the uniqueness constraint needs a case-insensitive
+index/collation (e.g. a functional unique index on `lower(name)` per tenant), not a plain unique
+constraint on the raw column. `11-testing.md` gains test cases for: create with a case-variant
+duplicate (rejected), rename to a case-variant duplicate of another Group (rejected), rename a used
+Group's Name to a case-variant duplicate (still rejected — the uniqueness check and the ADR-190 lock
+are independent checks, both apply). `open-questions.md`'s UOM-FX-OQ-008 is resolved by this ADR.
+
+---
+
+## ADR-192: UOM — four remaining Non-blocking field-extraction questions resolved
+
+**Context**: `module-field-extraction/uom/open-questions.md` carried four Non-blocking items forward
+after ADR-190/191 closed the two Blocking ones. Developer resolved all four this session, one by
+one. Bundled into a single ADR since all four were confirmed in the same round and are individually
+small.
+
+**Decision**:
+1. **UOM-FX-OQ-001** — `UOMType` gains an **optional** `category_id` FK to `UOMCategory` (a Type may
+   declare which Category it belongs to, e.g. "Feet" → "Length," but isn't required to). Not
+   enforced as mandatory — closes the mismatch gap for Types that opt in, without forcing a value
+   the legacy data/import path may not have.
+2. **UOM-FX-OQ-004** — a Group's Functional Role with no Type assignment **falls back to the
+   Group's Base Type** at resolution time, rather than blocking the operation. Applies wherever a
+   consumer resolves "which Type fulfills role X for this Group" and finds no assignment.
+3. **UOM-FX-OQ-005** — the "Uses Picking Hierarchy" indicator becomes a **computed/derived value**
+   (true if picking-hierarchy rows exist for the Group, false otherwise) — not a stored, independently
+   editable field. Removes the flag/row-presence inconsistency structurally, same reasoning pattern
+   as ADR-190's approach to the conversion-factor gap.
+4. **UOM-FX-OQ-007** — `UOMFunctionalRole` deletion is guarded by the same in-use `RESTRICT` pattern
+   as `UOMType`/`UOMCategory` (UOM-RULE-014) — blocked while any `UOMRoleAssignment` row still
+   references it.
+
+**Consequences**: `module-field-extraction/uom/entities-and-fields.md` — `UOMType` gains
+`category_id` (optional FK); `UOMGroup`'s "Picking Hierarchy (flag)" field is removed from the
+persisted field list and re-documented as computed. `business-rules.md` gains/amends rules for the
+Base-Type fallback (new rule), the computed picking-hierarchy indicator (amends whichever rule
+currently documents that flag), and the `UOMFunctionalRole` delete guard (extends UOM-RULE-014,
+formalizing what UOM-RULE-014's own scope note previously left as an unconfirmed extension). Same
+propagation needed into `docs-kit/5-modules/uom/`'s `3-business-rules.md`, `4-schema.md` (drop the
+flag column, add the optional `category_id` column, add the delete-guard FK), `6-validation.md`,
+`8-api.md` (resolved-role responses should surface which Type actually governs a role, including
+when it's a Base-Type fallback, not just the raw assignment), `9-ui.md` (Picking Hierarchy indicator
+displays as read-only/derived, not an editable toggle), and `11-testing.md` (test cases for: Type
+created with and without a Category; role resolution when a role's own assignment is missing;
+picking-hierarchy indicator reflecting row add/remove without an explicit flag toggle; Role deletion
+blocked while referenced). `open-questions.md`'s UOM-FX-OQ-001/004/005/007 are resolved by this ADR
+— no Non-blocking items remain open for UOM's field-extraction pass.
+
+---
+
+## ADR-193: List-row actions use icon-only buttons with a tooltip, project-wide
+
+**Context**: Users' list rows (`page.tsx`) and UOM's Group List (T-068, built this session) both
+render row actions as plain text buttons ("Edit"/"Open", "Delete"), the same pattern by coincidence
+rather than a documented standard. Developer asked, while reviewing UOM's Group List, whether to add
+icons to its Open/Delete actions — flagged first that doing so only for UOM would diverge from
+Users' already-built pattern. Developer's answer: make it consistent everywhere, icon-only with a
+tooltip (not icon+label).
+
+**Decision**: every list/table row's action buttons (edit/open, delete, and any future row action)
+render as **icon-only buttons with a tooltip** naming the action — no visible text label on the
+button itself. This is a project-wide UI convention, not a per-module choice: applies to Users
+(retrofit) and UOM (already built, retrofit) now, and to every future module's list screens by
+default going forward. A `Pencil`/`Eye` icon (whichever this project's icon set already uses for
+edit-vs-view distinctions — check `4-ui/3-design-system.md`'s icon inventory) for Edit/Open, `Trash2`
+for Delete, matching `lucide-react`'s icon set already in use elsewhere in the codebase (see
+`Sidebar.tsx`'s `ChevronDown`/`ChevronLeft` usage, `nav-items.ts`'s icon imports). The tooltip must
+carry the same text the old label did ("Edit", "Delete", "Open") so the action's meaning isn't lost
+for a user who can't infer it from the icon alone — this is also a required accessibility affordance,
+not just a visual nicety, so each icon button also needs an `aria-label` matching the tooltip text
+(a tooltip alone doesn't satisfy screen-reader accessible-name requirements).
+
+**Consequences**: `docs-kit/4-ui/4-component-standards.md` gains this as a documented row-action
+convention (add a note under whatever section currently covers table/list row actions, or a new
+subsection if none exists yet). `frontend/src/app/(dashboard)/users/page.tsx`'s `UserRow` component
+and `frontend/src/app/(dashboard)/settings/uom/groups/page.tsx`'s row actions are both updated to the
+icon-only + tooltip pattern. Any shared row-action component that emerges from this (rather than
+each page hand-rolling its own icon buttons) should live under `frontend/src/components/shared/`, so
+future modules reuse it instead of re-implementing the pattern per module — worth extracting now
+that a second module needs the identical pattern, rather than waiting for a third repetition.
+
+---
+
+## ADR-194: Multi-section create/edit forms use a bordered card per section, project-wide
+
+**Context**: UOM's Group Detail/Edit form (T-069, built this session) wraps each logical section
+(Header, Role Assignments, Conversion Factors, Picking Hierarchy) in a bordered, card-background
+`fieldset` — `border-border bg-card rounded-lg border p-6`. Developer noticed, comparing it side by
+side with Users' own Create User form, that Users' equivalent sections (Header, Password, Role &
+Group) use the same `<fieldset>`/`<legend>` structure but with no card/border styling — a plain flat
+layout. This was never actually a documented standard either way; UOM's author simply made a good
+choice Users' form (built earlier, before UOM existed) never had a reason to match.
+
+**Decision**: every multi-section create/edit form's sections render as bordered cards —
+`border-border bg-card rounded-lg border p-6` on each section's `fieldset` (or equivalent container),
+matching UOM's already-built pattern exactly, project-wide going forward.
+
+**Consequences**: `docs-kit/4-ui/4-component-standards.md` gains this as a documented form-section
+convention (Form Components). `frontend/src/components/shared/users/UserForm.tsx`'s three sections
+(Header, Password, Role & Group) are updated to the card style, retrofitting Users to match UOM
+rather than the reverse. Every future module's multi-section form follows this by default.

@@ -3,6 +3,7 @@ packages:
   - "frontend"
 allowBuilds:
   '@prisma/engines': true
+  '@scarf/scarf': false
   bcrypt: true
   esbuild: true
   msgpackr-extract: true

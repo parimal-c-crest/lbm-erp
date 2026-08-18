@@ -114,6 +114,10 @@ primitives:
 - Checkbox, Radio Button, Toggle Switch — shadcn/ui `Checkbox`/`RadioGroup`/`Switch`.
 - File Upload — custom composition over a native file input (no direct shadcn/ui primitive);
   drag-and-drop + click-to-browse, per `4-ui/5-form-standards.md`.
+- **Form Section** — a multi-section create/edit form (e.g. Header / Role Assignments / Password)
+  renders each section as a bordered card: `fieldset` (or equivalent) styled
+  `border-border bg-card rounded-lg border p-6`, `legend` as the section title — project-wide
+  convention (ADR-194), not left to each module's own layout choice.
 
 ## Action Components
 
@@ -132,7 +136,12 @@ primitives:
 
 - **Table** — shadcn/ui `Table`, responsive per `4-ui/6-responsive-design.md` (horizontal scroll or
   card-view fallback on mobile — never the mockup's plain non-responsive `<table>`, corrected per
-  ADR-177).
+  ADR-177). **Row actions** (Edit/Open, Delete, and any future per-row action) render icon-only with
+  a Tooltip naming the action — no visible text label on the button itself — project-wide convention
+  (ADR-193), implemented once as `frontend/src/components/shared/RowActions.tsx` and reused by every
+  module's list screen rather than each module hand-rolling its own action buttons. Each icon button
+  also carries an `aria-label` matching the tooltip text (§8) — the tooltip alone doesn't satisfy
+  screen-reader accessible-name requirements.
 - **Data Grid** — reserved for genuinely dense, sortable/filterable multi-column views (e.g. Sales
   Order line items); built as an extended `Table` with column-header sort, not a separate library.
 - **List** — simple vertical item list (e.g. Active Alerts feed, Customer Activity timeline items
@@ -146,7 +155,9 @@ primitives:
   Shipped/Pending/Draft).
 - **Avatar** — circular, initials fallback (matches mockup's "FA" pattern) when no image is set.
 - **Tooltip** — shadcn/ui `Tooltip`; used for the standing field-level help-icon pattern (ADR-101)
-  on every form field, every module.
+  on every form field, every module, and for every icon-only list row action's label (ADR-193). A
+  single `TooltipProvider` wraps the dashboard layout (`frontend/src/app/(dashboard)/layout.tsx`) so
+  individual usages don't each need their own provider.
 - **Accordion** — shadcn/ui `Accordion`; used for collapsible settings sections and FAQ-style help
   content.
 - **Tree View** — not currently required by any confirmed module's data shape; deferred until a

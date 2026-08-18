@@ -31,8 +31,9 @@ confidence detail: `project-docs/claude-docs/gap-analysis/review-log.md`.
 | [3-api/](../approved-docs/docs-kit/3-api/) | 10 (design, auth, authz, query/response standards, error handling, dev standards, versioning, OpenAPI spec, Postman collection) | 2026-08-17 (auth doc refreshed to v1.1 on 2026-08-18) | None — new synthesis |
 | [4-ui/](../approved-docs/docs-kit/4-ui/) | 8 (navigation, user flows, design system, component/form/responsive/accessibility standards, frontend dev standards) | 2026-08-17 | None — new synthesis, tokens sourced from reviewed Stitch mockup (ADR-177) |
 | [5-modules/users/](../approved-docs/docs-kit/5-modules/users/) | 11 (module spec through testing) | 2026-08-18 | `raw/2-module-specs/Users/*` (11 files, now `archive/2-module-specs/Users/`) |
-| [6-development/](../approved-docs/docs-kit/6-development/) | 6 of 10 (environment, folder structure, coding standards, git workflow, containerization, CI/CD — early wave) | 2026-08-17 | None — new synthesis. Late wave (implementation-workflow, testing-strategy, deployment-strategy, debugging-guide) not yet generated. |
-| 7-cross-cutting/ | Not yet generated | — | — |
+| [5-modules/uom/](../approved-docs/docs-kit/5-modules/uom/) | 11 (module spec through testing), amended three times same-session (ADR-190/191/192) | 2026-08-18 | `raw/2-module-specs/UOM/*` (11 files, now `archive/2-module-specs/UOM/`). Field-extraction adaptation: `project-docs/claude-docs/analysis/module-field-extraction/uom/`. |
+| [6-development/](../approved-docs/docs-kit/6-development/) | 10 of 10 (early wave: environment, folder structure, coding standards, git workflow, containerization, CI/CD; late wave: implementation-workflow, testing-strategy, deployment-strategy, debugging-guide) | Early wave 2026-08-17, late wave 2026-08-18 | None — new synthesis, informed by both Users' and UOM's now-approved module docs. |
+| 7-cross-cutting/ | Not yet generated — waits until every MVP module's docs are approved (see `documentation-plan.md`) | — | — |
 
 ## Raw Source of Truth (`project-docs/sot-docs/raw/`)
 
@@ -85,7 +86,7 @@ Each module folder: `build-guidance.md`, `business-rules-and-validation.md`, `ca
 | [Pricebooklevel200/](../sot-docs/raw/2-module-specs/Pricebooklevel200/) | Blueprint-sourced | 42 rules; 16 of 42 confirmed SQL injection; wrong-entity-class arbitrary write into Campaigns with no permission check; the real live primary pricing path. |
 | [Pricebooklevel300/](../sot-docs/raw/2-module-specs/Pricebooklevel300/) | Blueprint-sourced | 34 rules; 12 confirmed live SQL-injection points across 6 files; unresolved "coupon dead-end" (coupons gate pricing but discount value never consumed). |
 | [Pricebooklevel800/](../sot-docs/raw/2-module-specs/Pricebooklevel800/) | Blueprint-sourced | 14 rules; 4 confirmed SQL injections; header table has 0 rows — every non-"LP" pricing lookup fails; dead cascade-delete leaves 8 orphaned rules, 932 orphaned accounts. |
-| [UOM/](../sot-docs/raw/2-module-specs/UOM/) | Session-found (no separate vtiger module; lower rigor, self-flagged) | 2 confirmed SQL injections; 46+ files bypass the shared conversion function via direct table access; permission check not re-enforced in the AJAX dispatcher. |
+| ~~UOM/~~ | — | **Superseded** by `docs-kit/5-modules/uom/` (11 files, approved 2026-08-18, amended three times same-session for ADR-190/191/192). Moved whole to `archive/2-module-specs/UOM/`. Field-extraction adaptation: `project-docs/claude-docs/analysis/module-field-extraction/uom/`. |
 | [AccountStatement/](../sot-docs/raw/2-module-specs/AccountStatement/) | Re-partitioned from Accounts (filtered subset, not independently re-swept, self-flagged) | B2B `isPermitted` check actively skipped for B2B-flagged requests; same ÷12-vs-÷365 finance-charge divergence as Accounts. |
 
 ### 3 — Tech Stack Decision (`raw/3-tech-stack-decision/`)

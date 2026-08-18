@@ -14,7 +14,7 @@ Approach: extract legacy behavior module-by-module from real code + live DB firs
 process), then rewrite tech-agnostic — but not a straight port. Every module went through a design
 discussion before generation; where legacy had a bug, an ambiguity, or a clearly-better structure was
 possible, we decided fresh rather than porting the defect. All decisions are locked in
-`project-docs/claude-docs/gap-analysis/decisions-log.md` (188 ADRs as of this writing) — every
+`project-docs/claude-docs/gap-analysis/decisions-log.md` (194 ADRs as of this writing) — every
 generated document must reference that log, never re-decide something already locked there.
 
 **Target build: 15 MVP modules** (down from 18 blueprinted legacy modules — the legacy system's 4
@@ -57,37 +57,75 @@ status (those files are the source of truth; this section is a snapshot, refresh
 ## Where we are
 
 Documentation generation for the upfront categories is done; module-by-module JIT documentation +
-implementation is now the active work. Status as of 2026-08-18:
+implementation is now the active work. Status as of 2026-08-18 (end of session):
 
 - ✅ Discovery/gap-analysis, `sot-docs/index.md`, and the upfront doc categories
-  (`1-project/`, `2-database/`, `3-api/`, `4-ui/`, `6-development/` early wave) are all approved —
-  see `decisions-log.md` (188 ADRs) and `review-log.md` for the full record. **Read
-  `decisions-log.md` before touching any module or generating any document.**
+  (`1-project/`, `2-database/`, `3-api/`, `4-ui/`, `6-development/` — now **both** waves, early
+  and late) are all approved — see `decisions-log.md` (194 ADRs) and `review-log.md` for the full
+  record. **Read `decisions-log.md` before touching any module or generating any document.**
 - ✅ `6-implementation-plan/1-implementation-plan.md` (initial run) — 9 milestones, 34 epics,
   `claude-docs/plan/*` initialized.
 - ✅ **M1 (Environment Setup) — Released v1.0.0**, local-only (no real hosting yet, RAID R-002
   open). EPIC-001 (scaffolding) and EPIC-002 (Platform Administration / skeleton control panel,
   tenant provisioning + migration fanout + cron management) both Complete.
-- 🚧 **M2 (UI, All Modules, Static/Mock Data) — In Progress.** EPIC-003 (App Shell/Chrome) Complete.
-  **Users is the first module through its own JIT cycle** (`5-modules/users/`, 11 docs approved) —
-  its UI Design epic (EPIC-004) is done, all 17 tasks (Sprint 3), verified live via Playwright.
-  The other 14 modules' UI-Design epics remain `Not Started` — each needs its own JIT
-  documentation cycle first (`7-sprint-planning/1-sprint-planning.md` step 2a).
-- 🚧 **M3 (Backend/API: Identity & Catalog Foundation) — In Progress, started out of sequence**
-  (normally waits for M2 to fully complete first; started early on an explicit developer
-  instruction — see `raid-log.md` R-004). Users' Backend/API epic (EPIC-005) has its RBAC
-  foundation done (schema, auth/login/2FA/lockout, permission model, User/Role/Profile/Group CRUD
-  — Sprint 4, real e2e-tested); Time Clock/Payroll/Personal Days/QuickBooks/etc. backend work is
-  not started yet.
-- ⚠️ **Outstanding, not yet done**: the Design-First Strategy's real developer live-browser
-  review/approval of Users' UI pages never ran (developer was offline) — flagged in `raid-log.md`
-  R-003/R-004, still owed. **Nothing has been committed to git yet** — the whole tree past the
-  initial T-001–T-005 scaffolding commits is uncommitted working-tree state.
-- 🚧 `6-development/` late wave, `7-cross-cutting/` (NFR + threat model) — not started, wait for
-  more modules to complete their JIT cycles.
-- ⏸️ **Next action when resumed**: developer review of Users' built UI pages (closes R-003/R-004),
-  then either continue Users' Backend/API (T-055 onward) or run
-  `7-sprint-planning/1-sprint-planning.md` again for the next module's JIT documentation cycle.
+- 🚧 **M2 (UI, All Modules, Static/Mock Data) — In Progress.** EPIC-003 (App Shell/Chrome)
+  Complete. **Two of 15 modules have now been through their own full JIT cycle — Users and UOM**
+  (`5-modules/users/`, `5-modules/uom/`, 11 docs each, approved). Both modules' UI Design epics
+  are `Complete`/`Approved` (EPIC-004, EPIC-010) — every page built, real developer live-browser
+  review actually ran for both this session (R-003/R-004 closed). The other 13 modules' UI-Design
+  epics remain `Not Started` — each needs its own JIT documentation cycle first
+  (`7-sprint-planning/1-sprint-planning.md` step 2a).
+- ✅ **M3 (Backend/API: Identity & Catalog Foundation) — Users' and UOM's slices both Complete**,
+  started out of sequence (normally waits for M2 to fully complete first; started early on an
+  explicit developer instruction, `raid-log.md` R-004, now resolved). Users' Backend/API epic
+  (EPIC-005): 19 tasks (T-046–T-064) — RBAC foundation, Time Clock (+ concurrent-edit-lock
+  utility, reused project-wide), Payroll, Personal Days/Holidays, Login History, QuickBooks sync,
+  Mail Account/Notification Scheduler/Word Template, Barcode Labels, demo-data seed, OpenAPI docs.
+  UOM's Backend/API epic (EPIC-011): 10 tasks (T-073–T-082) — full Category/Type/Functional
+  Role/Group CRUD, atomic Group-save transaction (BR-019 completeness check), conversion-factor
+  history, picking-hierarchy, base-unit-pivot conversion service, role-resolution, bulk import/
+  export, real demo data, 20/20 e2e tests. Both real (skeleton/demo Postgres + Redis, no mocks).
+  **Location/Products (M3's other 2 foundation modules) not started yet.**
+- ✅ **Real login is wired** — `/login` calls the real `/auth/login` + `/auth/2fa/verify`
+  endpoints (Users' already-built backend), Username not Email (ADR-187's own follow-up, finally
+  applied), real logout clears the session and redirects. `/` now redirects to `/login`. No
+  frontend route guarding yet on protected pages (RAID R-007, open) — a logged-out user hitting a
+  dashboard URL directly sees a raw API error, not a redirect. 2FA is per-Role (ADR-075); a real
+  `admin`/`Admin@123` Admin-role user exists in the `demo` tenant
+  (`backend/scripts/create-admin-user.ts`, rerunnable), 2FA currently disabled for the Admin role
+  via the real per-role toggle (not a code change).
+- ✅ **UOM's full JIT gate ran end-to-end this session** — field-extraction → 11 module docs →
+  review → late-wave `6-development/` (which also caught and backfilled a process gap: it had
+  never actually triggered for Users either) → SoT update → task derivation → UI build → real
+  backend build → real browser verification, which itself found and fixed one real bug (Group
+  List's `roleAssignmentCount` — the list endpoint's summary shape didn't match what the page
+  read, crashing it). Three targeted ADRs came out of live developer review of UOM specifically:
+  **ADR-190** (Group becomes fully immutable/undeletable once transaction-referenced, Name stays
+  editable), **ADR-191** (Group name uniqueness is case-insensitive, checked on create+rename),
+  **ADR-192** (four bundled resolutions: optional Type Category, Base-Type role-resolution
+  fallback, computed picking-hierarchy indicator, FunctionalRole delete guard). Two more,
+  **ADR-193**/**ADR-194**, are cross-cutting UI conventions (icon-only row actions w/ tooltip;
+  bordered-card form sections) applied to **both** Users and UOM, not just UOM.
+- ⚠️ Known, deliberately-deferred limitation: UOM's transaction-reference lock check
+  (`isGroupLocked()`) is real code but always returns `false` — no consumer module
+  (SalesOrder/PurchaseOrder/etc.) exists yet to actually reference a Group. Correct given build
+  order (UOM ships in M3, transactional modules in M6+); the TODO in `groups.service.ts` names
+  exactly what future modules need to wire in.
+- ⚠️ Several real doc/schema gaps found and resolved pragmatically during EPIC-005, all flagged
+  for developer confirmation rather than silently decided — see `raid-log.md` R-005
+  (`Holiday`/`HolidayAssignment` had no column-level spec) and R-006
+  (`UserNotificationPreference` has a real table + frontend screen but no backend task anywhere).
+- ⚠️ **Nothing has been committed to git yet** — the whole tree past the initial T-001–T-005
+  scaffolding commits is uncommitted working-tree state. Raised repeatedly, still not decided.
+- ✅ `6-development/` — now complete, 10 of 10 documents (both waves). `7-cross-cutting/` (NFR +
+  threat model) still waits — runs once, last, after every module's own JIT cycle is done.
+- ✅ Playwright set up as real project tooling this session (`@playwright/test` at root,
+  `playwright.config.ts`, `tests/e2e/`) — ADR-027 was already locked, this makes it actually
+  runnable (`pnpm test:e2e`), not just an ad hoc `npx` habit.
+- ⏸️ **Next action when resumed**: commit decision (still open), then either Location/Products'
+  JIT documentation cycle (`7-sprint-planning/1-sprint-planning.md`, M3's remaining 2 foundation
+  modules) or closing R-007 (frontend route guarding) before more real-backend modules make the
+  gap more visible.
 
 Visual design: a written UI/UX brief (ADR-024, Tailwind+shadcn/ui per ADR-025) plus a reviewed Stitch
 AI mockup (design-source.md's Screenshots box, tokens reused per ADR-177) together now cover both the

@@ -138,6 +138,18 @@ only (where the fan-out is large enough that a table alone is hard to read at a 
 Sheet/Badge); EPIC-005 (Users — Backend/API)'s tasks (T-046–T-064) each wire onto their
 corresponding EPIC-004 screen task, per the epic-level `UI_USERS --> BE_USERS` edge above.
 
+EPIC-010 (UOM — UI Design)'s tasks (T-065–T-072) depend on EPIC-003's shell primitives
+(DataTable/Dialog/Sheet); within the epic, Group List (T-068) and Group Detail/Edit (T-069) depend
+on the Category/Type/Functional Role screens (T-065–T-067) for their dropdown data shapes, and
+Conversion Factor History (T-070) / Import-Export (T-071) each depend on the Group screen they
+attach to. EPIC-011 (UOM — Backend/API)'s tasks (T-073–T-082) each wire onto their corresponding
+EPIC-010 screen task, per the epic-level `UI_UOM --> BE_UOM` edge above; within the epic, the Group
+service (T-075) is the load-bearing task — Factor History (T-076), Picking Hierarchy (T-077), the
+Conversion service (T-078), and Role-resolution (T-079) all depend on it, since BR-019's atomic
+Group-save completeness check and BR-020's transaction-reference lock live there. No cross-module
+Backend/API dependency exists between UOM and the other M3 modules (Users, Location, Products) — see
+the Epic-level rationale above.
+
 ---
 
 # Revision History
@@ -146,3 +158,4 @@ corresponding EPIC-004 screen task, per the epic-level `UI_USERS --> BE_USERS` e
 |------|--------|
 | 2026-08-17 | Initial creation. |
 | 2026-08-18 | Noted task-level dependency pattern for EPIC-004/005 (Users) now that real tasks exist. |
+| 2026-08-18 | Noted task-level dependency pattern for EPIC-010/011 (UOM) now that real tasks exist (T-065–T-082); Group service (T-075) confirmed as the epic's load-bearing task. |
