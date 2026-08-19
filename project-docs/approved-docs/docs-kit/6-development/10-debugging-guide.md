@@ -17,11 +17,11 @@
 | Supported Platforms | Development / Staging / Production |
 | Primary Languages | TypeScript |
 | Frameworks | NestJS (backend), Next.js/React (frontend) |
-| Version | 1.0 (late wave — first run, folding in Users and UOM) |
+| Version | 1.1 (late wave — second run, folding in Location alongside Users and UOM) |
 | Status | Draft |
 | Author | Claude Code (docs-kit generation) |
 | Created Date | 2026-08-18 |
-| Last Updated | 2026-08-18 |
+| Last Updated | 2026-08-19 |
 
 ---
 
@@ -45,6 +45,11 @@ capability, not a generic "reproduce it somehow" instruction — §15 details it
   debugging-workflow level.
 - **Production troubleshooting approach**: §15 — the live-to-testing clone (ADR-066) is this
   project's primary answer to "it doesn't reproduce locally."
+- **Location's own debugging surface**: a QoH stock discrepancy is this module's own most likely
+  first-investigated issue class — §13 names the three things to check first (the non-negative
+  guard, the audit trail, the concurrent-edit lock) before assuming a deeper data problem; §13 also
+  names the part-supersession one-way-transition invariant as a first-class thing to verify when a
+  supersession-related report looks wrong.
 
 ---
 
@@ -77,7 +82,12 @@ Every issue investigation should follow these principles:
 - Fix the root cause, not symptoms — the concrete standard this project already sets for itself:
   Users' USR-RISK-001 fix isn't "catch the exception the empty-id delete throws," it's "reject the
   empty id before any query is constructed" (a shared `EntityIdentifier` value object, ADR-154) — the
-  structural fix, not a symptom patch.
+  structural fix, not a symptom patch. Location's own six confirmed legacy SQL-injection findings
+  (BR-026) follow the same discipline: the fix is parameterized queries and no dynamic column-name
+  construction by construction (`10-implementation-plan.md` Phase 4), not input-escaping applied
+  after the fact to the two request-derived column-name shapes (the Cost Detail tooltip's `field`
+  parameter, the field-level save endpoint's routing) that make this module's injection surface wider
+  than a typical value-only injection point.
 - Minimize code changes — per `CLAUDE.md`'s own project-wide instruction, a bug fix doesn't need
   surrounding cleanup unless that cleanup is itself the task.
 - Verify the solution — the fix's own new/updated test passes, plus the module's Regression Checklist
@@ -124,8 +134,8 @@ Categorize issues before investigation.
 | Validation Issue | Invalid input handling — mapped to a specific `VR-###` in the module's `6-validation.md` |
 | API Issue | Incorrect request/response — mapped to `8-api.md` |
 | Database Issue | Query failures, a delete-guard `RESTRICT` misbehaving (`6-development/6-testing-strategy.md` §6) |
-| Concurrency Issue | Two users editing the same record — the standard project-wide edit-lock pattern (ADR-079/080/084) either not applied to a module that needs it, or misbehaving where it is applied |
-| Performance Issue | Slow execution — e.g. an N+1-shaped conversion lookup instead of UOM's required batched pick-breakdown query (`1-module.md` §13) |
+| Concurrency Issue | Two users editing the same record — the standard project-wide edit-lock pattern (ADR-079/080/084) either not applied to a module that needs it, or misbehaving where it is applied; Location's Product-at-Location QoH row and branch config edits are both wired to this lock (`10-implementation-plan.md` Phase 3) |
+| Performance Issue | Slow execution — e.g. an N+1-shaped conversion lookup instead of UOM's required batched pick-breakdown query (`1-module.md` §13); Location's own demand/reorder-point recompute scanning full sales history instead of staying bounded by the configured lookback window (`11-testing.md` §10 Large Data) |
 | Security Issue | Authentication failures, a permission-escalation path (`6-development/6-testing-strategy.md` §12) |
 | Infrastructure Issue | Deployment or networking — `6-development/7-deployment-strategy.md` |
 | UI Issue | Rendering or layout problems — the exact class Users' own live-browser review (§16) caught (sidebar labels invisible at desktop width, FAB overlapping table actions) |
@@ -308,6 +318,11 @@ Verify:
   project's whole module-boundary design exists to close). Flag this class of finding distinctly, not
   as a routine fix: it likely needs the architecture-review-level regression test
   `6-development/6-testing-strategy.md` §12 already calls for (TC-018 in UOM's own testing document).
+  Location's own kit-quantity-as-computed service (BR-009) is a concrete instance of the same
+  boundary discipline in the opposite direction: a bug where Location's kit-adjustment endpoint reads
+  or writes a component product's row directly instead of going through Products' own Kit Component
+  interface contract (`10-implementation-plan.md` Phase 6) is the same class of violation, not a
+  routine data bug, and closes via TC-008 (`5-modules/location/11-testing.md`).
 
 ---
 
@@ -317,11 +332,37 @@ Check:
 
 - Connection — per `6-development/1-development-environment.md` §19's troubleshooting table.
 - Transactions — an atomic multi-table save (e.g. UOM's Group+RoleAssignments+ConversionFactors save,
-  BR-019) failing partway through should never leave a partial row; if it does, that's the bug, not
-  an acceptable partial-failure mode.
+  BR-019; Location's own quantity-and-cost move during part supersession, ADR-146/TC-013) failing
+  partway through should never leave a partial row; if it does, that's the bug, not an acceptable
+  partial-failure mode.
 - Locks / deadlocks — the standard project-wide concurrent-edit lock (ADR-079/080/084, Redis
   TTL-based) — check the lock's own state (is it held, did its heartbeat expire, did it release on
-  disconnect) before assuming a database-level deadlock.
+  disconnect) before assuming a database-level deadlock. Location's own Product-at-Location QoH row
+  and branch config edits are both wired to this lock.
+
+**Location's own stock-discrepancy investigation order** — when a reported on-hand quantity looks
+wrong, check in this order before assuming a deeper data problem:
+
+1. **The non-negative QoH guard** (BR-003) — confirm the row's stored quantity is not, and was never
+   persisted as, negative; the guard is enforced at both the application layer and a database `CHECK`
+   constraint backstop (`10-implementation-plan.md` Phase 2/3), so a negative value ever having
+   existed in the row's history is itself evidence of a bypass, not an edge case to work around.
+2. **The QoH audit trail** — every QoH write records a mandatory reason-for-change
+   (`10-implementation-plan.md` Phase 3, generalized from legacy's single-screen prompt,
+   `7-permissions.md` §10); reconstruct the actual write sequence from this trail before guessing
+   which caller produced the discrepancy, rather than inferring it from the current row state alone.
+3. **The concurrent-edit lock** (above) — confirm two simultaneous adjustments against the same row
+   didn't silently lost-update (the exact case Location's own TC-010 closes, ADR-084).
+4. **Part supersession's one-way transition invariant** — if the affected product has ever been
+   involved in a part-supersession event, confirm no code path ever set `partSuperseded: false` on an
+   already-superseded row (`3-business-rules.md` §6 State Transition Rules; TC-015 confirms no
+   endpoint accepts this) — a discrepancy that only appears after a supersession event is more likely
+   this invariant being violated somewhere than a QoH-write bug specifically.
+5. **Kit propagation** (BR-009) — if the affected product is a kit or a kit component, confirm the
+   kit's own displayed quantity is genuinely computed from its components' current rows, not an
+   independently-stored value that could have drifted (`10-implementation-plan.md` Phase 6 Verify:
+   "no independently-stored kit QoH exists to drift from it" — by construction, a kit/component
+   mismatch means the computation itself is wrong, not that two stored values disagree).
 - Indexes / execution plans — `EXPLAIN ANALYZE` against a slow query, cross-referenced with the
   module's own `4-schema.md` §"indexes" section (e.g. UOM's `uom_type_factor_history (group_id,
   type_id, effective_from)` performance index).
@@ -527,9 +568,10 @@ Before closing an issue verify:
 - `6-development/9-ci-cd.md` (build/artifact traceability, §6)
 - `6-development/1-development-environment.md` §15/§19 (tool setup and local troubleshooting this
   document's §8 restates at the debugging-workflow level)
-- `5-modules/users/*`, `5-modules/uom/*` (the concrete rule-ID/risk-register examples cited
-  throughout)
-- `decisions-log.md` (ADR-053, ADR-056, ADR-058, ADR-066, ADR-079, ADR-080, ADR-084, ADR-154, ADR-028)
+- `5-modules/users/*`, `5-modules/uom/*`, `5-modules/location/*` (the concrete rule-ID/risk-register
+  examples cited throughout)
+- `decisions-log.md` (ADR-053, ADR-056, ADR-058, ADR-066, ADR-079, ADR-080, ADR-084, ADR-154, ADR-028,
+  ADR-146–150, ADR-198)
 
 ---
 
@@ -538,6 +580,7 @@ Before closing an issue verify:
 | Version | Date | Author | Description |
 |----------|------|--------|-------------|
 | 1.0 | 2026-08-18 | Claude Code (docs-kit generation) | Initial Draft — first late-wave run, folding in both Users and UOM, and formally documenting the live-to-testing tenant clone (ADR-066) as this project's primary production-debugging mechanism. |
+| 1.1 | 2026-08-19 | Claude Code (docs-kit generation) | Second late-wave run — folded in Location: a dedicated stock-discrepancy investigation order (§13 — non-negative guard, audit trail, concurrent-edit lock, part-supersession one-way-transition invariant, kit-propagation computation), the module-boundary-violation check applied to Products' Kit Component interface (§12), the six-finding SQL-injection root-cause pattern (§3), and Location-specific issue-classification examples (§5). |
 
 ---
 
@@ -568,3 +611,9 @@ Before closing an issue verify:
 - Encourages safe debugging practices for development, testing, and production (§15), integrating
   logging, testing, and the module-boundary-violation check (§12) — a debugging-specific instance of
   UOM's own ADR-053 exclusivity principle — into the troubleshooting workflow.
+- This second late-wave run adds Location's own concrete examples (§3, §5, §12, §13) alongside, not
+  in place of, Users' and UOM's. §13's stock-discrepancy investigation order is this document's most
+  significant Location-specific addition — a named, ordered checklist (guard → audit trail → lock →
+  supersession invariant → kit computation) rather than a generic "check the database" instruction,
+  mirroring how §15's live-to-testing clone is this document's most load-bearing Users/UOM-era
+  addition.

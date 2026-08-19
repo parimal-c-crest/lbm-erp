@@ -17,7 +17,10 @@ export interface ModuleActionPermission {
 export class PermissionsService {
   constructor(private readonly tenantContext: TenantContextService) {}
 
-  async resolveForUser(userId: string): Promise<ModuleActionPermission[]> {
+  // `userId` is the User's internal bigint `id` (ADR-200) — callers are expected to pass
+  // `request.user.internalId`, already resolved once per request by `JwtStrategy`, not the raw
+  // JWT `sub` (`public_id`).
+  async resolveForUser(userId: bigint): Promise<ModuleActionPermission[]> {
     const prisma = this.tenantContext.prisma;
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -39,7 +42,7 @@ export class PermissionsService {
     return grants;
   }
 
-  async hasPermission(userId: string, module: string, action: string): Promise<boolean> {
+  async hasPermission(userId: bigint, module: string, action: string): Promise<boolean> {
     const prisma = this.tenantContext.prisma;
     const user = await prisma.user.findUnique({
       where: { id: userId },

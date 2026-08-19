@@ -14,7 +14,7 @@ Approach: extract legacy behavior module-by-module from real code + live DB firs
 process), then rewrite tech-agnostic — but not a straight port. Every module went through a design
 discussion before generation; where legacy had a bug, an ambiguity, or a clearly-better structure was
 possible, we decided fresh rather than porting the defect. All decisions are locked in
-`project-docs/claude-docs/gap-analysis/decisions-log.md` (194 ADRs as of this writing) — every
+`project-docs/claude-docs/gap-analysis/decisions-log.md` (201 ADRs as of this writing) — every
 generated document must reference that log, never re-decide something already locked there.
 
 **Target build: 15 MVP modules** (down from 18 blueprinted legacy modules — the legacy system's 4
@@ -57,7 +57,67 @@ status (those files are the source of truth; this section is a snapshot, refresh
 ## Where we are
 
 Documentation generation for the upfront categories is done; module-by-module JIT documentation +
-implementation is now the active work. Status as of 2026-08-18 (end of session):
+implementation is now the active work. Status as of 2026-08-19 (end of session, updated same day —
+two work blocks this date, second one below the first):
+
+- ✅ **2FA disabled for all 5 roles** in the demo tenant (previously only Admin had it off) — via
+  new rerunnable `backend/scripts/disable-2fa-all-roles.ts`, using the existing per-role toggle
+  (ADR-075), not a code change to the 2FA feature itself.
+- ✅ **ADR-201 — column-order convention, project-wide: `id`, `public_id` (where present), then the
+  6 system fields in fixed order `created_at, updated_at, created_by, updated_by, is_deleted,
+  deleted_at`, then all business fields.** Applies to every existing table and every future
+  module's tables. The 6 models with no `id`/`public_id` (1:1 child tables keyed by parent FK, or
+  composite-key join tables — `UserHrProfile`, `UserPreference`, `RoleTwoFactorRequirement`,
+  `RoleProfile`, `QuickBooksSyncPointer`, `MailAccount`) are a confirmed, permanent exception to
+  ADR-200's "every table" language.
+  **Important finding, worth remembering for any future schema-order change**: editing
+  `schema.prisma` field order alone does NOT change physical column order — Prisma's migration
+  diffing doesn't track column position at all (verified with `migrate dev --create-only`: same
+  columns/types reordered → empty migration). Fixing this for real required squashing migration
+  history to one fresh baseline (`20260819094258_init`) and a full reset+reseed of both local DBs.
+  Acceptable only because this project is local-only pre-production (no real hosting yet) — would
+  not be valid once a real environment holds real data. Frontend/backend dev port conflict also
+  fixed in passing: both wanted port 3000 by default — frontend's `package.json` `dev` script now
+  pins `next dev -p 3001` (backend stays default 3000, matching `NEXT_PUBLIC_API_URL`).
+- ✅ **Location is now the 3rd module through the full JIT gate** — field-extraction → 11 module
+  docs (with 3 Blocking gaps resolved: fresh reorder-point formula **ADR-196**, no-hard-delete
+  Active/Inactive-only **ADR-197**) → review (`11-testing.md` rejected once, fixed, re-approved) →
+  late-wave `6-development/` folded in → SoT updated (legacy blueprint archived) → task list
+  derived (EPIC-006 T-083–087, EPIC-007 T-088–097) → UI built and developer-reviewed live
+  (`/settings/locations`, wizard, detail, lost-sale report). **EPIC-006 Design Status still
+  `Pending Review`, not `Approved`** — review happened but got interrupted by the ID-architecture
+  discussion below before final sign-off; confirm and flip to `Approved` before starting
+  Location's Backend/API (EPIC-007). Location's nav moved from top-level into Settings (**ADR-195**,
+  matching UOM's own precedent) — `4-ui/1-navigation.md` is now stale (still says 10 top-level
+  items, was already stale for UOM too) — known gap, not fixed (doc's own draft→review→promote
+  flow, not a side effect of a module JIT cycle).
+- ✅ **ADR-199**: Add-Location Wizard's Sort Order (Display Sequence) auto-suggests
+  `(existing-location-count + 1)`; all 6 document-numbering prefixes auto-populate as
+  `<LegacyLetter><SortOrder>-`, editable; both Sort Order and each prefix field independently
+  unique across locations. Raised and built during live UI review.
+- ✅ **ADR-200 — dual-key identity, project-wide, supersedes ADR-005's single-UUID-PK rule.**
+  Every table now has `id` (BIGINT, real PK, every FK references this, **never exposed
+  externally**) + `public_id` (UUID, the *only* identity in any API response/URL/frontend — same
+  external contract as before, zero frontend/OpenAPI changes). Raised by the developer for join
+  performance + SQL-console debugging ergonomics; naming went through one correction mid-session
+  (`internal_id`/`id` → final `id`/`public_id`) — decisions-log has the full amendment trail.
+  **Retrofit is done and verified**: `prisma/schema.prisma` (all 31 models), both local DBs
+  (`lbm_erp_skeleton`, `lbm_erp_dev`) reset+migrated+reseeded, Users' and UOM's backend code
+  audited for UUID→id resolution and response-shaping, global `2-database/` docs + Location's/
+  Users'/UOM's own `4-schema.md` updated. **80/81 e2e tests passing** (UOM 20/20, Users 60/61) —
+  found and fixed 3 real bugs along the way (`toPublicEntity` leaking `createdBy`/`updatedBy`
+  bigints → crashed every write; `login-history`/`quickbooks-sync` services bypassing it entirely;
+  `timeclock` silently dropping `userId` from responses). **The 1 remaining failure
+  (`job-scheduling.e2e-spec.ts`) is a pre-existing Prisma/pg socket bug, confirmed unrelated to
+  ADR-200 — not fixed, flagged for a future session.**
+- ⚠️ **Nothing from this session is committed yet** — developer said they'll commit themselves.
+  Don't assume a clean working tree at the start of the next session; check `git status` first.
+- ⏸️ **Next action when resumed**: confirm Location's UI Design Status → `Approved`, then either
+  Location's Backend/API (EPIC-007) or Products' JIT documentation cycle (M3's other remaining
+  foundation module). The `job-scheduling.e2e-spec.ts` socket bug is a loose end worth a dedicated
+  look before it's forgotten.
+
+Prior session (2026-08-18) status, still accurate except where superseded above:
 
 - ✅ Discovery/gap-analysis, `sot-docs/index.md`, and the upfront doc categories
   (`1-project/`, `2-database/`, `3-api/`, `4-ui/`, `6-development/` — now **both** waves, early

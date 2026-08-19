@@ -17,11 +17,11 @@
 | Deployment Model | CI/CD (GitHub Actions, ADR-181) — Staging automatic, Production manually gated [Source: `6-development/9-ci-cd.md` §7/§15] |
 | Hosting Platform | Plain Node.js processes, no containers (`6-development/8-containerization.md`) |
 | Cloud Provider | AWS, default and kept portable [ADR-071] |
-| Version | 1.0 (late wave — first run, folding in Users and UOM) |
+| Version | 1.1 (late wave — second run, folding in Location alongside Users and UOM) |
 | Status | Draft |
 | Author | Claude Code (docs-kit generation) |
 | Created Date | 2026-08-18 |
-| Last Updated | 2026-08-18 |
+| Last Updated | 2026-08-19 |
 
 ---
 
@@ -46,6 +46,12 @@ the same for runtime architecture — filling both in now that this is the first
 - **Rollback approach**: Git-level revert plus a redeploy-of-previous-commit mechanism (§12) — this
   project always rebuilds from source, never redeploys a stored binary, so a rollback is simply
   "deploy an older commit" (§12, restated from `6-development/9-ci-cd.md` §18's own shape).
+- **Location's own fold-in**: Location introduces no new deployment mechanism or environment — it
+  follows the same standard pattern as Users and UOM. Its two genuinely deployment-relevant
+  specifics — a scheduled BullMQ job (§13) and encrypted-at-rest integration credentials (§16) — are
+  both already-locked, already-generalized project capabilities, not new infrastructure Location
+  itself requires; noted below rather than omitted, per this document's own guardrail against
+  silently skipping a module with minimal deployment impact.
 
 ---
 
@@ -346,7 +352,9 @@ After deployment verify:
 - Authentication — a login attempt against the newly deployed backend succeeds (exercised by the
   post-deploy Playwright smoke test, §14).
 - Background jobs — BullMQ workers (auto-clock-out safety net, QuickBooks sync, notification
-  schedulers — all Users-module examples) are running and processing their queues.
+  schedulers — all Users-module examples; **Location's own lost-sale/false-loss promotion cron**,
+  `5-modules/location/8-api.md` §Queues, BR-019/BR-020 — a scheduled job, not API-triggered) are
+  running and processing their queues.
 - Scheduled tasks — the skeleton-hosted cron/job management panel's own scheduled jobs
   (ADR-059) are firing on their configured per-tenant schedule.
 - External integrations — QuickBooks, CardConnect, AWS S3 connectivity confirmed reachable (not
@@ -406,6 +414,16 @@ Deployment should ensure:
 - Security scanning — `pnpm audit` at the CI level (`6-development/9-ci-cd.md` §13), no separate
   deployment-time scan beyond what already gates the merge.
 - Dependency vulnerability checks — same as above, merge-blocking on high/critical severity.
+- Encrypted-at-rest secrets, application-level — a category distinct from GitHub Actions Secrets
+  (§10): **Location's Location Accounting Configuration** stores third-party payment-gateway/
+  vendor-integration credentials (TecOrder/Fuse5Connect/CIPW/CIP-EP families, R6) that must be
+  encrypted at rest in the tenant database itself, not merely protected by transport encryption —
+  the same class of finding this project's whole security-driven rewrite exists to close ("plaintext
+  integration credentials" was a confirmed legacy finding, `CLAUDE.md`). No deployment-pipeline
+  change is required for this — it is an application-layer encryption requirement verified by
+  Location's own `10-implementation-plan.md` Phase 2/8 and `11-testing.md` TC (Sensitive data
+  exposure) — noted here because it is this document's own §16 concern once a module actually stores
+  such credentials, which Location is the first module to do.
 
 ---
 
@@ -544,7 +562,9 @@ After deployment verify:
 - `6-development/1-development-environment.md`
 - `1-project/4-tech-stack.md`
 - `decisions-log.md` (ADR-056, ADR-057, ADR-059, ADR-060, ADR-061, ADR-062, ADR-065, ADR-066,
-  ADR-067, ADR-070, ADR-071, ADR-028, ADR-181)
+  ADR-067, ADR-070, ADR-071, ADR-028, ADR-181, ADR-152)
+- `5-modules/location/8-api.md` §Queues (the lost-sale/false-loss promotion cron), `5-modules/
+  location/7-permissions.md` §6 (R6 encrypted-credential requirement)
 
 ---
 
@@ -553,6 +573,7 @@ After deployment verify:
 | Version | Date | Author | Description |
 |----------|------|--------|-------------|
 | 1.0 | 2026-08-18 | Claude Code (docs-kit generation) | Initial Draft — first late-wave run, filling in what `6-development/9-ci-cd.md`/`8-containerization.md` deliberately deferred. |
+| 1.1 | 2026-08-19 | Claude Code (docs-kit generation) | Second late-wave run — folded in Location: noted as introducing no new deployment mechanism (§1), added its scheduled BullMQ lost-sale/false-loss cron to the post-deploy health-check background-job list (§13), and its encrypted-at-rest integration-credential requirement (R6) to the security requirements section (§16) as the first module to actually store such credentials. |
 
 ---
 
@@ -581,3 +602,8 @@ After deployment verify:
   uptime target doesn't translate into either figure automatically.
 - Flags AWS service-selection granularity, DR-runbook formalization, and CDN/APM tooling as open
   items rather than guessing specifics ADR-071/ADR-028 don't themselves narrow.
+- Location's own fold-in is deliberately light — per this document's own guardrail ("don't omit,
+  note why" for a module with minimal deployment-specific content), Location's Executive Summary
+  bullet (§1) states explicitly that it introduces no new deployment mechanism, then §13/§16 add its
+  two genuinely relevant specifics (a scheduled BullMQ job, an encrypted-credential requirement)
+  rather than inventing deployment content the module doesn't actually need.

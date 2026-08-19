@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 
+import { toPublicEntity } from '../../common/utils/public-entity.util';
 import type { HoursType } from '../../generated/prisma/enums';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 
@@ -38,7 +39,7 @@ export class PersonalDaysService {
     return this.tenantContext.prisma;
   }
 
-  async submit(userId: string, dto: SubmitPersonalDayDto) {
+  async submit(userId: bigint, dto: SubmitPersonalDayDto) {
     const startDate = new Date(dto.startDate);
     const endDate = dto.endDate ? new Date(dto.endDate) : null;
 
@@ -65,11 +66,11 @@ export class PersonalDaysService {
 
     await this.bridgeToTimeClock(userId, personalDay);
 
-    return personalDay;
+    return toPublicEntity(personalDay);
   }
 
   private async bridgeToTimeClock(
-    userId: string,
+    userId: bigint,
     personalDay: {
       hoursType: HoursType;
       startDate: Date;

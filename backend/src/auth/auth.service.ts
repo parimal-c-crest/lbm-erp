@@ -94,7 +94,10 @@ export class AuthService {
 
     if (requiresTwoFactor) {
       const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-      this.pendingTwoFactor.set(user.id, {
+      // Keyed by `publicId` — never the internal bigint `id` — since this value also rides in
+      // the client-visible challenge token's `sub` claim below (ADR-200: only `public_id` is
+      // ever exposed to a client, and a JWT is base64-decodable, not encrypted).
+      this.pendingTwoFactor.set(user.publicId, {
         code,
         expiresAt: Date.now() + TWO_FACTOR_CODE_TTL_MS,
         attempts: 0,
@@ -109,13 +112,13 @@ export class AuthService {
       // *this* login attempt rather than letting any caller submit an arbitrary userId + guessed
       // code (session-binding fix, security review finding).
       const challengeToken = this.jwt.sign(
-        { sub: user.id, purpose: '2fa-challenge' } satisfies TwoFactorChallengePayload,
+        { sub: user.publicId, purpose: '2fa-challenge' } satisfies TwoFactorChallengePayload,
         { expiresIn: '15m' },
       );
       return { requires2fa: true, challengeToken };
     }
 
-    return this.issueTokens(user.id, user.roleId);
+    return this.issueTokens(user.publicId, user.roleId);
   }
 
   async verifyTwoFactor(challengeToken: string, code: string) {
@@ -146,12 +149,12 @@ export class AuthService {
 
     this.pendingTwoFactor.delete(userId);
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ where: { publicId: userId } });
     if (!user) throw invalidChallenge();
-    return this.issueTokens(user.id, user.roleId);
+    return this.issueTokens(user.publicId, user.roleId);
   }
 
-  private async issueTokens(userId: string, roleId: string | null) {
+  private async issueTokens(userId: string, roleId: bigint | null) {
     const role = roleId ? await this.prisma.role.findUnique({ where: { id: roleId } }) : null;
     const payload = { sub: userId, tenant: this.tenantContext.subdomain, role: role?.name ?? '' };
     return {

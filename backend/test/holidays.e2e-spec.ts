@@ -14,12 +14,16 @@ interface LoginResponseBody {
 describe('Users module — holidays (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let staffRoleId: string;
-  let adminRoleId: string;
-  let staffUserId: string;
+  // ADR-200 — internal bigint ids, used only for this test's own direct Prisma setup/teardown.
+  let staffRoleId: bigint;
+  let adminRoleId: bigint;
+  let staffUserId: bigint;
+  let staffUserPublicId: string;
   let staffAccessToken: string;
   let adminAccessToken: string;
-  let createdHolidayIds: string[] = [];
+  // Response bodies' `id` is the Holiday's publicId (UUID) — cleanup below resolves these back to
+  // internal bigint ids before touching HolidayAssignment/Holiday directly via Prisma.
+  let createdHolidayPublicIds: string[] = [];
 
   const staffUsername = 'e2e-holiday-staff';
   const adminUsername = 'e2e-holiday-admin';
@@ -56,6 +60,7 @@ describe('Users module — holidays (e2e)', () => {
       },
     });
     staffUserId = staffUser.id;
+    staffUserPublicId = staffUser.publicId;
     await prisma.user.create({
       data: {
         firstName: 'E2E',
@@ -82,10 +87,15 @@ describe('Users module — holidays (e2e)', () => {
       .expect(201);
     adminAccessToken = (adminLogin.body as LoginResponseBody).accessToken!;
 
-    createdHolidayIds = [];
+    createdHolidayPublicIds = [];
   });
 
   afterEach(async () => {
+    const createdHolidays = await prisma.holiday.findMany({
+      where: { publicId: { in: createdHolidayPublicIds } },
+      select: { id: true },
+    });
+    const createdHolidayIds = createdHolidays.map((h) => h.id);
     await prisma.holidayAssignment.deleteMany({ where: { holidayId: { in: createdHolidayIds } } });
     await prisma.holiday.deleteMany({ where: { id: { in: createdHolidayIds } } });
     await prisma.user.deleteMany({ where: { username: { in: [staffUsername, adminUsername] } } });
@@ -98,13 +108,15 @@ describe('Users module — holidays (e2e)', () => {
       .post('/holidays')
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
-      .send({ name: 'Thanksgiving', date: '2026-11-26', userIds: [staffUserId] })
+      .send({ name: 'Thanksgiving', date: '2026-11-26', userIds: [staffUserPublicId] })
       .expect(201);
 
-    createdHolidayIds.push((response.body as { id: string }).id);
+    const holidayPublicId = (response.body as { id: string }).id;
+    createdHolidayPublicIds.push(holidayPublicId);
 
+    const holiday = await prisma.holiday.findUniqueOrThrow({ where: { publicId: holidayPublicId } });
     const assignments = await prisma.holidayAssignment.findMany({
-      where: { holidayId: (response.body as { id: string }).id },
+      where: { holidayId: holiday.id },
     });
     expect(assignments).toHaveLength(1);
     expect(assignments[0].userId).toBe(staffUserId);
@@ -126,7 +138,7 @@ describe('Users module — holidays (e2e)', () => {
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .send({ name: 'Independence Day', date: '2026-07-04' })
       .expect(201);
-    createdHolidayIds.push((created.body as { id: string }).id);
+    createdHolidayPublicIds.push((created.body as { id: string }).id);
 
     const response = await request(app.getHttpServer())
       .get('/holidays')

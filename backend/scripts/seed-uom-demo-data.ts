@@ -172,8 +172,12 @@ async function main() {
   const adapter = new PrismaPg({ connectionString: demoTenantUrl });
   const prisma = new PrismaClient({ adapter });
 
+  // ADR-200 — `id` is now the internal bigint primary key (never exposed via any API); this script
+  // uses it purely for in-script relation-linking (create Type→Category, Group→BaseType/Role/etc.),
+  // exactly the intra-process use ADR-200 still allows. `publicId` (unused here) would only matter
+  // if this script exposed ids externally, which a seed script does not.
   // --- Categories ---------------------------------------------------------------------
-  const categoryIdByKey = new Map<string, string>();
+  const categoryIdByKey = new Map<string, bigint>();
   for (const category of CATEGORIES) {
     const existing = await prisma.uOMCategory.findFirst({
       where: { name: category.name, isDeleted: false },
@@ -187,9 +191,11 @@ async function main() {
   }
 
   // --- Types ---------------------------------------------------------------------------
-  const typeIdByKey = new Map<string, string>();
+  const typeIdByKey = new Map<string, bigint>();
   for (const type of TYPES) {
-    const existing = await prisma.uOMType.findFirst({ where: { name: type.name, isDeleted: false } });
+    const existing = await prisma.uOMType.findFirst({
+      where: { name: type.name, isDeleted: false },
+    });
     const row =
       existing ??
       (await prisma.uOMType.create({
@@ -203,16 +209,18 @@ async function main() {
   }
 
   // --- Functional Roles (already seeded by the migration — just resolve ids) ----------
-  const roleIdByName = new Map<string, string>();
+  const roleIdByName = new Map<string, bigint>();
   for (const name of ROLE_NAMES) {
     const role = await prisma.uOMFunctionalRole.findFirst({ where: { name, isDeleted: false } });
     if (role) roleIdByName.set(name, role.id);
   }
 
   // --- Groups + Role Assignments + Conversion Factors + Picking Hierarchy -------------
-  const groupIdByKey = new Map<string, string>();
+  const groupIdByKey = new Map<string, bigint>();
   for (const group of GROUPS) {
-    const existing = await prisma.uOMGroup.findFirst({ where: { name: group.name, isDeleted: false } });
+    const existing = await prisma.uOMGroup.findFirst({
+      where: { name: group.name, isDeleted: false },
+    });
     if (existing) {
       groupIdByKey.set(group.key, existing.id);
       continue;

@@ -29,6 +29,18 @@ Late wave (5, 6, 7, 10) approved 2026-08-18 (v1.0, first late-wave run, folding 
 UOM — the two modules approved to date). Two developer-confirmed judgment calls locked during this
 batch: `7-deployment-strategy.md`'s RTO/RPO default (4 business hours / 15 minutes, still flagged as
 a developer-approved default rather than a sourced figure) and `10-debugging-guide.md`'s live-to-
-testing clone retention policy (persists until manually deleted, no auto-expiry). See
-`project-docs/claude-docs/gap-analysis/review-log.md` for verdicts and
-`project-docs/claude-docs/gap-analysis/decisions-log.md` for every cited decision.
+testing clone retention policy (persists until manually deleted, no auto-expiry).
+
+Late wave updated to v1.1 (2026-08-19, second late-wave run) — folded in **Location** (the third
+module approved to date) without disturbing Users' or UOM's already-folded-in content:
+`5-implementation-workflow.md` gained Location's build-guidance-sourced 9-phase sequencing (QoH-core
+before security-hardening) and its partially-blocking Products/Kit-Component dependency;
+`6-testing-strategy.md` gained Location's golden-output demand/reorder-point tests and its two named
+cross-module chain tests (kit propagation, part-supersession open-order flagging);
+`7-deployment-strategy.md` gained Location's scheduled BullMQ lost-sale cron and its encrypted-
+at-rest integration-credential requirement (noted as otherwise introducing no new deployment
+mechanism); `10-debugging-guide.md` gained a dedicated stock-discrepancy investigation checklist
+(non-negative guard → audit trail → concurrent-edit lock → supersession invariant → kit computation).
+See `project-docs/claude-docs/gap-analysis/review-log.md` for verdicts and
+`project-docs/claude-docs/gap-analysis/decisions-log.md` for every cited decision (this round added
+ADR-146–153, ADR-195–198).

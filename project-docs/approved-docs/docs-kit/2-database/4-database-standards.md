@@ -33,8 +33,12 @@ soft-delete enforcement, no shared audit-column set). [Source: `decisions-log.md
 - Avoid redundant data — no duplicate formula/logic implementation across tables/modules.
   [Source: `decisions-log.md` ADR-030]
 - Maintain referential integrity via real foreign keys.
-- UUID primary keys everywhere — closes the legacy IDOR/enumeration class of finding.
-  [Source: `decisions-log.md` ADR-005]
+- **Dual-key identity, every table**: an internal `bigint` auto-increment primary key (`id`) that
+  every foreign key references, plus an external `UUID` (`public_id`) that is the only identity
+  ever exposed via API/URL/frontend — closes the legacy IDOR/enumeration class of finding exactly
+  as ADR-005 originally did, while `id` gives join/index performance and developer-debugging
+  ergonomics a single UUID-only PK doesn't. [Source: `decisions-log.md` ADR-200, supersedes
+  ADR-005's single-UUID-PK rule]
 - Soft delete uniform across every table.
 - Full audit trail (both per-row audit columns and the separate project-wide `audit_log`).
   [Source: `decisions-log.md` ADR-005, ADR-068]
@@ -71,21 +75,37 @@ status
 
 ## Primary Keys
 
+Dual-key, every table (**ADR-200**, supersedes ADR-005's single-UUID-PK rule):
+
 ```
-id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY
+public_id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid()
 ```
+
+`id` is the real primary key — every foreign key across every table references it, never
+`public_id`. `public_id` is a unique (not primary) column, and the **only** identity ever returned
+in an API response, accepted as a request path/body parameter, or rendered in a frontend URL —
+`id` is never exposed to a client. This keeps ADR-005's IDOR/enumeration protection fully intact
+while giving joins/indexes bigint-level performance and developers a small, typeable id for
+debugging (SQL console, logs, verbal reference).
 
 ## Foreign Keys
 
-`<singular_entity>_id`:
+`<singular_entity>_id`, typed `BIGINT`, referencing the related table's `id` (not `public_id`):
 
 ```
-account_id
-product_id
-category_id
-sales_order_id
-purchase_order_id
+account_id    BIGINT REFERENCES accounts(id)
+product_id    BIGINT REFERENCES products(id)
+category_id   BIGINT REFERENCES categories(id)
+sales_order_id     BIGINT REFERENCES sales_orders(id)
+purchase_order_id  BIGINT REFERENCES purchase_orders(id)
 ```
+
+**Resolving a client-supplied UUID into the FK value**: any endpoint that accepts a related
+record's `public_id` (UUID) from a request — e.g. "create this Product-at-Location for
+`locationId: <public_id>`" — must resolve that `public_id` to its `id` before writing the FK
+column. This is a required one-extra-lookup step on every such endpoint, not an implementation
+detail to skip; audit for it explicitly during each module's Backend/API build, module by module.
 
 ## Indexes
 
@@ -115,11 +135,12 @@ table may skip business-audit columns if the relationship itself carries no inde
 
 | Column | Type | Description |
 |----------|------|-------------|
-| `id` | UUID | Primary key |
+| `id` | `BIGINT`, `GENERATED ALWAYS AS IDENTITY` | Real primary key; every FK references this, never `public_id` (**ADR-200**) |
+| `public_id` | UUID, unique (not primary) | The only identity exposed via API/URL/frontend (**ADR-200**) |
 | `created_at` | `timestamptz` | Record creation time |
 | `updated_at` | `timestamptz` | Last modified time |
-| `created_by` | UUID (FK → `users.id`) | Who created the record |
-| `updated_by` | UUID (FK → `users.id`) | Who last modified the record |
+| `created_by` | BIGINT (FK → `users.id`) | Who created the record |
+| `updated_by` | BIGINT (FK → `users.id`) | Who last modified the record |
 | `is_deleted` | boolean, default `false` | Soft-delete flag |
 | `deleted_at` | `timestamptz`, nullable | Soft-delete timestamp |
 
@@ -135,7 +156,8 @@ a companion `<entity>_events` append-only table. [Source: `decisions-log.md` ADR
 
 | Purpose | Data Type |
 |----------|-----------|
-| Primary Key | `UUID` |
+| Primary Key (`id`) | `BIGINT`, `GENERATED ALWAYS AS IDENTITY` (**ADR-200**) |
+| External identity (`public_id`) / foreign keys | `UUID` for `public_id`; `BIGINT` for FK columns, referencing the related table's `id` (**ADR-200**) |
 | Short text (name, SKU, status) | `VARCHAR` |
 | Long text (description, notes) | `TEXT` |
 | Boolean | `BOOLEAN` |
@@ -152,9 +174,11 @@ gap where fractional UOM quantities needed a workaround. [Source: `decisions-log
 
 # 6. Constraints
 
-- **Primary Key** — every table, UUID.
-- **Foreign Key** — enforced at the database level for every real relationship; never left as an
-  unenforced application-level convention.
+- **Primary Key** — every table, `id` (`BIGINT`, dual-key per **ADR-200**); `public_id` (UUID) is
+  a separate unique, non-primary column.
+- **Foreign Key** — enforced at the database level for every real relationship, referencing the
+  related table's `id`, never its `public_id`; never left as an unenforced application-level
+  convention.
 - **Unique** — wherever a business key must be unique (e.g. Products' SKU, per ADR-092); naturally
   scoped per-database now, not `(tenant_id, ...)`-composite. [Source: `decisions-log.md` ADR-073]
 - **NOT NULL** — on every column without a confirmed legitimate nullable case; closes the legacy pattern
@@ -308,6 +332,7 @@ recovery) — not a custom application-level backup system. [Source: `decisions-
 | Version | Date | Author | Description |
 |----------|------|--------|-------------|
 | 1.0 | 2026-08-17 | Claude Code | Initial draft |
+| 1.1 | 2026-08-19 | Claude Code | ADR-200: dual-key identity — `id` (internal `bigint`, real PK, every FK references this) + `public_id` (external `UUID`, only identity ever exposed) — replaces the single-UUID-PK rule, project-wide. Primary Keys, Foreign Keys, Standard Columns, Data Types, Constraints sections updated. |
 
 ---
 

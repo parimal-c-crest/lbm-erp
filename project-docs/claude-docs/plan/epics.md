@@ -17,8 +17,11 @@ through T-064) across EPIC-004 (UI Design) and EPIC-005 (Backend/API) — see `t
 (`docs-kit/5-modules/uom/`) is the second module through this gate (2026-08-18, 11 documents incl.
 the ADR-190/191/192 amendment rounds already folded in) — its real task list is now derived too: 18
 tasks (T-065 through T-082) across EPIC-010 (UI Design) and EPIC-011 (Backend/API) — see
-`task-list.md`. Design Status stays blank for both (task derivation alone doesn't start design
-work). Every other module epic remains `TBD`.
+`task-list.md`. Location (`docs-kit/5-modules/location/`) is the third module through this gate
+(2026-08-19, 11 documents incl. the ADR-198 amendment round already folded in) — its real task list
+is now derived too: 15 tasks (T-083 through T-097) across EPIC-006 (UI Design) and EPIC-007
+(Backend/API) — see `task-list.md`. Design Status stays blank for Location's epic pair too (task
+derivation alone doesn't start design work). Every other module epic remains `TBD`.
 
 ---
 
@@ -35,13 +38,13 @@ work). Every other module epic remains `TBD`.
 
 ## Module epics — UI Design (Milestone 2)
 
-Every row except EPIC-004/005 (Users) and EPIC-010/011 (UOM) below: task list
-`TBD — awaiting just-in-time module documentation`.
+Every row except EPIC-004/005 (Users), EPIC-010/011 (UOM), and EPIC-006/007 (Location) below: task
+list `TBD — awaiting just-in-time module documentation`.
 
 | ID | Epic | Module Slug | Status | Design Status |
 |----|------|-------------|--------|----------------|
 | EPIC-004 | Users — UI Design | `users` | Complete | Approved |
-| EPIC-006 | Location — UI Design | `location` | Not Started | blank |
+| EPIC-006 | Location — UI Design | `location` | In Progress § | Pending Review |
 | EPIC-008 | Products — UI Design | `products` | Not Started | blank |
 | EPIC-010 | UOM — UI Design | `uom` | Complete | Approved |
 | EPIC-012 | Vendors — UI Design | `vendors` | Not Started | blank |
@@ -67,17 +70,24 @@ own live-browser review ran this session (multiple rounds — row-action icons/A
 cards/ADR-194, column/tab renames, layout width fixes) and design is confirmed Approved
 2026-08-18 — Complete per the Module Design-First Strategy's rollup rule.
 
+§ EPIC-006: real 5-task breakdown derived (T-083–T-087, `task-list.md`) from Location's approved JIT
+documentation set. All 5 tasks are now `Done` (Branch List, Add-Location Wizard, Branch Detail/Edit,
+Lost Sale Log Report, mock dataset — all mock-data-only per the Module Design-First Strategy, no
+real backend yet). Epic status is `In Progress`, not `Complete`, per the rollup rule: a `<Module> —
+UI Design` epic also needs Design Status `Approved`, which only happens after the developer reviews
+live in a browser — that hasn't happened yet. Design Status is `Pending Review`.
+
 ---
 
 ## Module epics — Backend/API (Milestones 3-9)
 
-Every row except EPIC-005 (Users) and EPIC-011 (UOM) below: task list
+Every row except EPIC-005 (Users), EPIC-011 (UOM), and EPIC-007 (Location) below: task list
 `TBD — awaiting just-in-time module documentation`.
 
 | ID | Epic | Module Slug | Milestone | Status | Design Status |
 |----|------|-------------|-----------|--------|----------------|
 | EPIC-005 | Users — Backend/API | `users` | M3 | Complete | Approved* |
-| EPIC-007 | Location — Backend/API | `location` | M3 | Not Started | blank |
+| EPIC-007 | Location — Backend/API | `location` | M3 | Not Started § | blank |
 | EPIC-009 | Products — Backend/API | `products` | M3 | Not Started | blank |
 | EPIC-011 | UOM — Backend/API | `uom` | M3 | Complete | Approved |
 | EPIC-013 | Vendors — Backend/API | `vendors` | M4 | Not Started | blank |
@@ -119,6 +129,15 @@ signal is a stub (`groups.service.ts` `isGroupLocked()`, TODO comment names exac
 modules need to register a check there). Correct given build order — UOM (M3) ships before any
 transactional module (M6+) — not something to fix now.
 
+§ EPIC-007: real 10-task breakdown derived (T-088–T-097, `task-list.md`) from Location's approved
+JIT documentation set. All 10 tasks start `Available` — no task started yet, so Status stays
+`Not Started` per the rollup rule; this footnote exists only to distinguish "real tasks exist, none
+started" from the `TBD` placeholder state every other still-undocumented module epic carries. One
+confirmed cross-module dependency to track going forward: T-092 (part supersession/kit-quantity)
+needs Products' own Kit Component interface, which doesn't exist yet — Location's side is built and
+unit-tested against a stub now; full integration is a confirmed follow-up once Products' own
+Backend/API epic (EPIC-009) lands, not a silently dropped requirement.
+
 ---
 
 # Revision History
@@ -134,3 +153,4 @@ transactional module (M6+) — not something to fix now.
 | 2026-08-18 | EPIC-005 status set to `In Progress` — Sprint 4 (T-046–T-054, the RBAC foundation) Done, started out of sequence while M2 isn't complete (R-004). T-055 onward not yet built. |
 | 2026-08-18 | EPIC-005 status set to `Complete` — all 19 tasks (T-046–T-064) Done: Time Clock, Payroll, Personal Days/Holidays, Login History, QuickBooks sync, Mail Account/Notification Scheduler/Word Template, Barcode Labels, seed data, the project's first concurrent-edit lock utility, and OpenAPI docs. 17 e2e suites / 61 tests, all real (skeleton Postgres + Redis), no mocks. Two real doc/schema gaps found and resolved along the way, both flagged in `raid-log.md` (R-005 Holiday/HolidayAssignment, R-006 UserNotificationPreference backend never scoped). Still out of sequence vs M2 (R-004 unresolved — the Design-First live-review gate for EPIC-004's UI never ran). |
 | 2026-08-18 | EPIC-010/011 (UOM) real task list derived — 18 tasks (T-065–T-082), module-scoped re-run of `6-implementation-plan/1-implementation-plan.md` steps 2-6/8, replacing the `TBD` placeholder. Status stays `Not Started` for both (no task started). See `task-list.md`. |
+| 2026-08-19 | EPIC-006/007 (Location) real task list derived — 15 tasks (T-083–T-097), module-scoped re-run of `6-implementation-plan/1-implementation-plan.md` steps 2-6/8, replacing the `TBD` placeholder. Status stays `Not Started` for both (no task started); Design Status stays blank for EPIC-006. Traceability check found no gap in Location's own scope; one confirmed cross-module dependency flagged (T-092 kit-quantity propagation needs Products' Kit Component interface, built later against Products' own JIT'd EPIC-009). See `task-list.md`, `dependencies.md`. |

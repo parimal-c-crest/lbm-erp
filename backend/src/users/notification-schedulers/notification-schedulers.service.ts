@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { toPublicEntity } from '../../common/utils/public-entity.util';
 import { EntityIdentifier } from '../../common/value-objects/entity-identifier';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 
@@ -16,30 +17,33 @@ export class NotificationSchedulersService {
     return this.tenantContext.prisma;
   }
 
-  list() {
-    return this.prisma.notificationScheduler.findMany({ orderBy: { name: 'asc' } });
+  async list() {
+    const items = await this.prisma.notificationScheduler.findMany({ orderBy: { name: 'asc' } });
+    return items.map(toPublicEntity);
   }
 
-  create(dto: CreateNotificationSchedulerDto) {
-    return this.prisma.notificationScheduler.create({ data: dto });
+  async create(dto: CreateNotificationSchedulerDto) {
+    return toPublicEntity(await this.prisma.notificationScheduler.create({ data: dto }));
   }
 
   async update(id: string, dto: UpdateNotificationSchedulerDto) {
     const identifier = EntityIdentifier.from(id);
-    const existing = await this.prisma.notificationScheduler.findUnique({
-      where: { id: identifier.value },
+    const existing = await this.prisma.notificationScheduler.findFirst({
+      where: { publicId: identifier.value },
     });
     if (!existing) throw new NotFoundException('Notification scheduler not found.');
-    return this.prisma.notificationScheduler.update({ where: { id: identifier.value }, data: dto });
+    return toPublicEntity(
+      await this.prisma.notificationScheduler.update({ where: { id: existing.id }, data: dto }),
+    );
   }
 
   async remove(id: string) {
     const identifier = EntityIdentifier.from(id);
-    const existing = await this.prisma.notificationScheduler.findUnique({
-      where: { id: identifier.value },
+    const existing = await this.prisma.notificationScheduler.findFirst({
+      where: { publicId: identifier.value },
     });
     if (!existing) throw new NotFoundException('Notification scheduler not found.');
-    await this.prisma.notificationScheduler.delete({ where: { id: identifier.value } });
+    await this.prisma.notificationScheduler.delete({ where: { id: existing.id } });
     return { deleted: true };
   }
 }

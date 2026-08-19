@@ -16,13 +16,13 @@ interface LoginResponseBody {
 describe('Users module — timeclock override lock (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let adminRoleId: string;
-  let managerRoleId: string;
-  let staffRoleId: string;
+  let adminRoleId: bigint;
+  let managerRoleId: bigint;
+  let staffRoleId: bigint;
   let adminAccessToken: string;
   let managerAccessToken: string;
   let recordId: string;
-  let staffUserId: string;
+  let staffUserId: bigint;
 
   const adminUsername = 'e2e-lock-admin';
   const managerUsername = 'e2e-lock-manager';
@@ -94,7 +94,7 @@ describe('Users module — timeclock override lock (e2e)', () => {
         status: 'clock_out',
       },
     });
-    recordId = record.id;
+    recordId = record.publicId;
 
     const adminLogin = await request(app.getHttpServer())
       .post('/auth/login')

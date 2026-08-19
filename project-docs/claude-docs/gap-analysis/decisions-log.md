@@ -4203,3 +4203,260 @@ matching UOM's already-built pattern exactly, project-wide going forward.
 convention (Form Components). `frontend/src/components/shared/users/UserForm.tsx`'s three sections
 (Header, Password, Role & Group) are updated to the card style, retrofitting Users to match UOM
 rather than the reverse. Every future module's multi-section form follows this by default.
+
+## ADR-195: Location moves out of top-level nav into Settings
+
+**Context**: Location's UI-Design step (EPIC-006) started. Today `frontend/src/config/nav-items.ts`
+lists Location as a top-level sidebar item alongside Products/Vendors/Accounts. Location's actual
+day-to-day surface is a Super-Admin-only "Add Location" wizard (ADR-055) — infrequent, admin-only
+setup, not a module staff browse daily. Same shape as UOM, which already moved under Settings >
+System Configuration.
+
+**Decision**: Location's nav entry moves from top-level into Settings' children, next to Mail
+Account and Unit of Measure. Top-level nav drops from 10 items to 9. Location's primary screen under
+that entry is the Add-Location wizard (generate new location), per ADR-055's already-locked wizard
+behavior — no change to the wizard itself, only where it's reached from. Product-at-Location data
+(QoH, bin, cost, reorder/forecast) stays owned by Products' own UI/table per ADR-055/091/146/147 —
+unaffected by this move.
+
+**Consequences**: `frontend/src/config/nav-items.ts` — remove Location's top-level entry, add it as
+a Settings child. `docs-kit/4-ui/1-navigation.md` §3/§5's top-level list updates to 9 items.
+Location's own `9-ui.md` (once written) documents Settings as its nav home, matching UOM's doc.
+
+## ADR-196: Location's reorder-point/reorder-quantity formula is designed fresh, not ported
+
+**Context**: Location field-extraction (Blocking item B-1) found the legacy reorder-point/
+reorder-quantity arithmetic lives inside a different legacy module (Customreport), and the real
+formula was never recoverable past Customreport's own request-parameter-parsing header — only its
+read-inputs (Reorder flag, Primary Supplier, Days Inventory, request filters) and write-back
+mechanism (a dynamically-selected target field, gated by a per-row freeze date) could be
+characterized. `build-guidance.md` already directs bringing this calculation inside Location's own
+boundary in the new design (Customreport becomes read-only reporting) — but there was no legacy
+formula left to port in.
+
+**Decision**: don't chase the legacy arithmetic. Design a fresh reorder-point formula for the new
+system using the standard approach — lead-time demand plus safety stock, computed from Location's
+own already-catalogued Avg Daily Demand / Avg Lead Time / Days Inventory fields
+(`module-field-extraction/location/entities-and-fields.md`) — rather than reverse-engineering an
+unrecoverable legacy calculation.
+
+**Consequences**: `module-field-extraction/location/open-questions.md` B-1 marked resolved.
+`calculations.md`/`4-schema.md`/`6-validation.md` for Location's 11-doc set define the real formula
+explicitly (exact inputs, safety-stock basis) when drafted — not left as `[NEEDS INPUT]`.
+Location's `LOCATION-RULE-038`-equivalent gets a real, documented multi-step formula.
+
+## ADR-197: Location has no hard delete — Active/Inactive toggle only
+
+**Context**: Location field-extraction (Blocking item B-3) found the legacy delete path
+(`Delete.php`) performs no real guard against deleting a branch that still has non-zero QoH, open
+orders, or WMS placements — the generic permission-check function it calls was never traceable, and
+`Delete.php` itself does only a record-id presence check. Since Location's delete behavior was
+always going to be designed fresh (not ported), there was no confirmed legacy behavior to preserve
+or deliberately replace.
+
+**Decision**: Location has no delete endpoint at all in the new design. Once created, a branch can
+only be toggled Active/Inactive (ADR-152's already-real status field) — never hard-deleted. Removes
+the entire class of orphaned-reference risk (stock, open orders, WMS placements, GL mappings,
+cost history) a delete guard would otherwise have to enumerate and re-check indefinitely.
+
+**Consequences**: `module-field-extraction/location/open-questions.md` B-3 marked resolved.
+Location's `permissions.md`/`business-rules.md`/`9-ui.md` (once drafted) define no Delete action —
+only the Active/Inactive toggle screen affordance. `LOCATION-RULE-022`'s legacy delete-permission
+gap is moot — there's no delete path to guard.
+
+## ADR-198: Location's 11-doc drafting round — nine bundled resolutions
+
+**Context**: Drafting Location's 11 module documents (`claude-docs/drafts/5-modules/location/`)
+surfaced 10 `[NEEDS INPUT]` items — none blocking the whole extraction (already past that gate at
+ADR-196/197), but each needed before the docs can be finalized and reviewed. Developer resolved all
+of them in this session, together, following the same "bundled resolutions" pattern as ADR-192.
+
+**Decisions**:
+1. **Part-supersession WAC blend** — simple weighted average: `(old QoH × old WAC + new QoH × new
+   WAC) ÷ total QoH`.
+2. **Projected Next Use Date** — designed fresh (legacy formula unrecoverable, same as ADR-196's
+   reorder-point precedent), derived from Last Sold Date + Avg Days Between Sales.
+3. **Avg Lead Time no-history fallback** — 14 days, for a brand-new product/branch with zero
+   purchase history.
+4. **Reorder-point Safety Stock formula** — confirmed as `Avg Daily Demand × Days Inventory`
+   (ADR-196's own drafted formula, developer-approved as-is).
+5. **Branch Name uniqueness** — case-insensitive, extending UOM's ADR-191 pattern project-wide to
+   Location.
+6. **GL account-mapping storage** — normalized table (one row per transaction-type/account-code
+   pair), not a JSONB blob — queryable/validatable, matches R7's intent.
+7. **Default-Location Picklist ownership** — Location module owns it (not Accounts).
+8. **Selling UOM Type / Vendor Order (PUOM) Type fields** — reference UOM module's own Type/Group
+   entity (per ADR-053's shared conversion-service pattern) instead of a hardcoded local enum list.
+9. **Remaining enum value lists** (Location Type, Shop Parts Fee Basis, Store-Transfer Pricing
+   Basis ×3, Default Out-of-Stock Option ×2, Sales Rank, Part Type, Price Label, Set Reorder
+   Minimum Using, Assembly Product Type, Require SO Part Notes, Part Notes Display) — proposed
+   values approved as-is (see `claude-docs/drafts/5-modules/location/5-data-dictionary.md` for the
+   full per-field lists).
+10. **Lost Sale Log Report screen** — routed page (own URL), not a dialog/overlay — matches the
+    rest of the app's pattern, unlike legacy's popup shape.
+
+Role/permission access on branch and reorder data (originally posed as its own question) is
+**not** a fixed matrix — it defers entirely to the standard RBAC per-role permission system already
+built in the Users module (EPIC-005), same as every other module.
+
+**Consequences**: all 10 `[NEEDS INPUT]` markers across Location's 11 drafted documents are
+replaced with this ADR's resolved content. `7-permissions.md` references the Users module's RBAC
+system rather than hardcoding a role matrix. Docs proceed to `4-document-review/1-document-review.md`
+next.
+
+## ADR-199: Location's Display Sequence auto-suggests, and drives auto-populated document-numbering prefixes
+
+**Context**: Raised during live developer review of the Add-Location Wizard (T-084, EPIC-006
+Design Status Pending Review). Today Display Sequence (`entities-and-fields.md` — sort/display
+order for a branch in location pickers/lists) has no suggested default, and the six
+document-numbering prefix fields (SO/PO/Quote/Invoice/Estimate/PO-Receipt) default to fixed legacy
+letters (`S`/`P`/`Q`/`I`/`ES`/`R`) with no per-location distinguishing suffix — nothing stopped two
+locations from ending up with the same prefix.
+
+**Decision**:
+1. **Display Sequence auto-suggests as (count of existing locations + 1)** when the Add-Location
+   Wizard opens — e.g. 5 existing locations → suggested 6. Editable, not locked.
+2. **All 6 document-numbering prefix fields auto-populate as `<LegacyLetter><DisplaySequence>-`**
+   using the suggested/entered Display Sequence — e.g. Display Sequence 6 → SO Number Prefix `S6-`,
+   PO Number Prefix `P6-`, Quote `Q6-`, Invoice `I6-`, Estimate `ES6-`, PO Receipt `R6-`. Editable,
+   not locked — the auto-value is a starting suggestion, not enforced.
+3. **Display Sequence must be unique across all locations.** Each of the 6 prefix fields must be
+   unique within its own field (no two locations share the same SO Number Prefix, independently for
+   each of the 6 prefix types) — enforced on save regardless of whether the value came from the
+   auto-suggestion or a manual edit.
+
+**Consequences**: Add-Location Wizard's Identity & Numbering step (T-084, already built) gets the
+auto-suggest/auto-populate behavior added, wired to the shared mock fixture's current location
+count. `3-business-rules.md`/`6-validation.md`/`4-schema.md` for Location gain a new rule and two
+new unique constraints (Display Sequence; each of the 6 prefix fields, independently) —
+applied when Location's Backend/API epic (EPIC-007) builds the real schema/validation, and updated
+in the approved `docs-kit/5-modules/location/` documents now.
+
+## ADR-200: Dual-key primary keys — internal bigint identity + external UUID, project-wide (supersedes ADR-005's single-UUID-PK rule)
+
+**Context**: ADR-005 mandated UUID-only primary keys, specifically to close the legacy IDOR/
+enumeration vulnerability class (guessable sequential ids let one user access/edit another's
+record). Developer raised two real, separate costs of UUID-only PKs during Location's live UI
+review: (1) join/index performance — UUID is 16 bytes vs. bigint's 8, so every index is larger,
+fewer entries fit per page, more page reads per join, at real (if not yet measured) scale; (2)
+developer debugging ergonomics — a UUID is unreadable/untypeable in a SQL console, log line, or
+verbal reference ("check location 6" vs. reciting a 36-character string), materially slower
+day-to-day debugging. UUIDv7 (time-ordered UUID) was discussed as a narrower fix — it solves the
+insert-fragmentation half of the performance problem but not the byte-width half, and doesn't touch
+the debugging-readability problem at all. Both raised costs are real and neither is solved by a
+single-column change, so the decision is a genuine dual-key design, not a narrower substitute.
+
+**Decision**: every table gets two identity columns, project-wide, replacing ADR-005's single `id`
+UUID column:
+- **`id`** — `BIGINT GENERATED ALWAYS AS IDENTITY`, the real primary key. Every foreign key across
+  every table references `id` (bigint → bigint joins, full join-speed benefit, and the natural
+  debugging handle — small integers). **Never exposed via any API response, URL, or accepted as
+  request input** — internal-only.
+- **`public_id`** — `UUID`, a unique indexed (non-primary) column. This is the only identity
+  exposed via any API response, URL, or frontend — functionally identical to what ADR-005's `id`
+  column already did; **the external contract is unchanged**, `3-api/`, the OpenAPI spec, and every
+  already-built frontend page need no changes.
+  (Naming amendment, same session: the bigint/UUID roles were initially drafted as `internal_id`/
+  `id` respectively; developer flipped it so `id` reads naturally as "the real database id" and
+  `public_id` names the externally-exposed one, which is the less intuitive of the two to leave
+  unnamed. Functionally identical decision, corrected before any migration ran.)
+- **Real cost accepted**: whenever a request carries a `public_id` reference to another record
+  (e.g. creating a Product-at-Location row for `locationId: <public_id>`), the backend must resolve
+  that `public_id` to its `id` before writing the FK column — one extra lookup per foreign
+  reference on every create/update endpoint that accepts a related-record identifier. This is
+  application code, not just a schema change, and applies to every future module the same way.
+
+**Scope — applies retroactively, not just going forward**: Users' and UOM's already-built real
+Prisma schema/backend (`prisma/schema.prisma`, 31 models) are retrofitted to this pattern, not
+grandfathered under ADR-005's old shape — a project with two coexisting PK conventions across
+modules is worse than a one-time retrofit cost now, while only 2 modules have real backend built.
+Location (docs only, no real backend yet) adopts the pattern directly in its still-unbuilt schema.
+Every module from here on follows this as the standard, stated once in `2-database/
+4-database-standards.md`, never restated per module.
+
+**Consequences**: `2-database/1-database-design.md` and `4-database-standards.md` updated to
+describe the dual-key standard (Primary Keys section) in place of ADR-005's single-UUID rule.
+Users' and UOM's `docs-kit/5-modules/<module>/4-schema.md` updated to match. `prisma/schema.prisma`
+retrofitted: every model's `id` field (previously `String @id @default(uuid())`) becomes
+`id BigInt @id @default(autoincrement())`, a new `publicId String @unique @default(uuid())
+@map("public_id")` field is added, and every relation's `fields`/`references` moves from the old
+UUID `id` to the new bigint `id`. Backend service/repository code that resolves a relation from a
+client-supplied `public_id` gains an explicit `findUnique({ where: { publicId } })` → use its `id`
+step before the relational write — audited module by module (UOM done this session; Users still
+pending), not assumed correct by the schema change alone. A real Prisma migration is required;
+existing local dev data is migrated, not discarded.
+
+**Amendment (same session): migration applied, verified end-to-end, 2 real bugs found and fixed.**
+- Naming finalized during retrofit: the bigint internal PK is named `id` (not `internal_id` as
+  first drafted), the external UUID is named `public_id` (not `id`) — reads naturally as "id = the
+  real database id," matching this amendment's own Decision section above (already updated to
+  match; this note exists for anyone reading the earlier retrofit reports that used the old names).
+- Both local databases (`lbm_erp_skeleton`, `lbm_erp_dev`) reset and migrated. One migration-SQL
+  bug found and fixed in the process: `uom_functional_roles` (which has 6 baked-in seed rows from
+  an earlier migration) got `ADD COLUMN public_id TEXT NOT NULL` with no default/backfill — fails
+  on any table with existing rows. Fixed by splitting into add-nullable → `UPDATE ... SET
+  public_id = gen_random_uuid()` → `SET NOT NULL`.
+- Full e2e suite (UOM + Users, 81 tests) run to verify the retrofit actually works, not just
+  typechecks. Found and fixed 2 more real bugs beyond what the per-module audits caught:
+  1. **`toPublicEntity`** (both the UOM and Users copies of this response-shaping helper) only
+     stripped the internal `id` field — left `createdBy`/`updatedBy` (also bigint post-retrofit)
+     in the response, crashing `JSON.stringify` on every single write endpoint (`500`), which then
+     left committed-but-unreturned rows behind and produced misleading `409`s on retry. Fixed to
+     strip every bigint-valued field generically, not just `id`.
+  2. Two services bypassed `toPublicEntity` / didn't select `publicId` at all:
+     `login-history.service.ts` (returned raw records) and `quickbooks-sync.service.ts` (selected
+     `id` instead of `publicId`). Both fixed. `timeclock.service.ts` also needed a fix in the
+     other direction — the generic bigint-strip above correctly stopped the crash but also
+     silently dropped `userId` from every timeclock response entirely, a real API-contract
+     regression, not just a crash; fixed by re-expressing it as the record owner's `publicId`
+     (fetched via an `include`, not the caller's own token — an override edits someone else's
+     punch).
+- **Result**: 80/81 e2e tests passing. The one remaining failure (`job-scheduling.e2e-spec.ts`)
+  is a pre-existing Prisma/pg driver-adapter socket error inside the BullMQ worker
+  (`Cannot read properties of undefined (reading 'Socket')`) — confirmed unrelated to this
+  retrofit by the actual error message, not a bigint/publicId issue. Flagged, not fixed this
+  session.
+
+## ADR-201: Column-order convention — id/public_id then audit/soft-delete fields, both up front; business fields after, project-wide
+
+**Context**: developer requested a consistent column-order convention for every table, checked
+against the actual schema. An audit of `prisma/schema.prisma` (33 models) found `id`/`publicId`
+were already declared first everywhere they exist — no fix needed there. It also found 6 models
+with no `id`/`publicId` at all (`UserHrProfile`, `UserPreference`, `RoleTwoFactorRequirement`,
+`RoleProfile`, `QuickBooksSyncPointer`, `MailAccount`) — 1:1 child tables keyed by their parent's
+FK, or composite-key join tables, never referenced independently. Developer confirmed these are
+intentional exceptions, not a gap — no surrogate key needed on a table nothing else joins to
+directly. The real inconsistency found: the 6 common system fields (`createdAt`, `updatedAt`,
+`createdBy`, `updatedBy`, `isDeleted`, `deletedAt`) were both ordered inconsistently relative to
+each other (`User` had audit fields before soft-delete fields, five UOM models had it reversed)
+and positioned inconsistently relative to business fields (trailing after them everywhere).
+Developer's first instruction was to put system fields last; immediately revised to put them
+first instead — this entry reflects the final, corrected decision only.
+
+**Decision**: every table's column order is, in full: `id`, `public_id` (where present, per
+ADR-200), then whichever subset of the 6 system fields a table has — fixed relative order
+`created_at, updated_at, created_by, updated_by, is_deleted, deleted_at` — then all business
+fields. The 6 no-`id`/`public_id` models above remain an explicit, permanent exception to
+ADR-200's "every table" language — 1:1 child tables and composite-key join tables key off their
+parent/composite instead. Applies to every existing table and every future module's tables.
+Relation fields (not real DB columns) are unaffected — Prisma always places them after scalars
+regardless.
+
+**Applied this session**: `TenantRegistry`, `User`, `JobDefinition`, `JobSchedule`, `UOMCategory`,
+`UOMType`, `UOMFunctionalRole`, `UOMGroup`, `UOMRoleAssignment`, `UOMConversionFactor`,
+`UOMTypeFactorHistory`, `UOMPickingHierarchy` all reordered so their system fields sit immediately
+after `id`/`public_id`, ahead of every business field.
+
+**Amendment (same session): schema-only edit alone did not fix physical column order — migration
+history squashed to actually apply it.** Verified with `prisma migrate dev --create-only`: Prisma's
+migration diffing does not track column order at all (same columns, same types → empty migration),
+so `prisma migrate reset` alone would have replayed the old migration files verbatim and left
+physical column order unchanged, silently. Fix required: deleted all 6 existing migration files
+(all already committed to git, so recoverable), generated one fresh baseline migration
+(`20260819094258_init`) from the now-reordered `schema.prisma`, reset both local databases
+(`lbm_erp_skeleton`, `lbm_erp_dev`) onto it, reseeded (tenant registry, users/roles/UOM demo data,
+admin user, all-roles-2FA-off). Verified for real via `information_schema.columns` — `users` and
+`uom_categories` both now physically show `id, public_id, created_at, updated_at, created_by,
+updated_by, is_deleted, deleted_at, <business fields...>`. Migration-history squash is acceptable
+because this project is local-only pre-production (no real hosting yet, per current status) — would
+not be a valid move once a real environment holds real data.

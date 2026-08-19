@@ -16,17 +16,24 @@ export class MailAccountsService {
     return this.tenantContext.prisma;
   }
 
-  async findOwn(userId: string) {
+  // `MailAccount`'s PK is the owning User's internal bigint `id` (shared-PK 1:1 extension table,
+  // ADR-200 — no separate `public_id`: it's never addressed by its own URL/endpoint, only ever
+  // read/written as part of "my own" record). `userId` is stripped from the response below since
+  // it's an internal id (never exposed) and a raw `bigint` can't survive `JSON.stringify` anyway.
+  async findOwn(userId: bigint) {
     const account = await this.prisma.mailAccount.findUnique({ where: { userId } });
     if (!account) throw new NotFoundException('No mail account configured yet.');
-    return account;
+    const { userId: _internalUserId, ...rest } = account;
+    return rest;
   }
 
-  upsertOwn(userId: string, dto: UpsertMailAccountDto) {
-    return this.prisma.mailAccount.upsert({
+  async upsertOwn(userId: bigint, dto: UpsertMailAccountDto) {
+    const account = await this.prisma.mailAccount.upsert({
       where: { userId },
       create: { userId, ...dto },
       update: dto,
     });
+    const { userId: _internalUserId, ...rest } = account;
+    return rest;
   }
 }
