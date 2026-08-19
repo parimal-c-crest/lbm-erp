@@ -150,6 +150,25 @@ Group-save completeness check and BR-020's transaction-reference lock live there
 Backend/API dependency exists between UOM and the other M3 modules (Users, Location, Products) — see
 the Epic-level rationale above.
 
+EPIC-006 (Location — UI Design)'s tasks (T-083–T-087) depend on EPIC-003's shell primitives
+(DataTable/Stepper/Switch/AlertDialog); within the epic, the Add-Location Wizard (T-084) and Branch
+Detail/Edit (T-085) both depend on Branch List (T-083) as their entry point. The Lost Sale Log Report
+(T-086) is independent (a separate routed page reachable from Settings and a home-page portlet, not
+gated behind the branch screens). EPIC-007 (Location — Backend/API)'s tasks (T-088–T-097) each wire
+onto their corresponding EPIC-006 screen task, per the epic-level `UI_LOC --> BE_LOC` edge above;
+within the epic, the schema migration (T-088) and the Product-at-Location core/QoH-write command
+(T-089) are the load-bearing tasks — security hardening (T-090), Branch CRUD (T-091), part
+supersession (T-092), the demand/reorder-point pipeline (T-093), and the lost-sale/false-loss +
+accounting-config pipeline (T-094) all depend on one or both, since BR-003's non-negative invariant
+and BR-006's concurrent-edit lock live in T-089 and every other write path builds on top of it. **One
+real cross-module dependency, tracked explicitly, not silently assumed**: T-092's kit-quantity
+propagation (BR-009/R3) needs Products' own Kit Component interface — Products has not been through
+its own JIT documentation cycle yet, so T-092 builds and unit-tests Location's own side of that
+contract against a stub now; full integration testing is a confirmed follow-up once Products' own
+Backend/API epic (EPIC-009) lands (`5-modules/location/10-implementation-plan.md`'s own stated Risk;
+`epics.md`'s EPIC-007 § footnote). No other cross-module Backend/API dependency exists between
+Location and the other M3 modules (Users, Products, UOM) — see the Epic-level rationale above.
+
 ---
 
 # Revision History
@@ -159,3 +178,4 @@ the Epic-level rationale above.
 | 2026-08-17 | Initial creation. |
 | 2026-08-18 | Noted task-level dependency pattern for EPIC-004/005 (Users) now that real tasks exist. |
 | 2026-08-18 | Noted task-level dependency pattern for EPIC-010/011 (UOM) now that real tasks exist (T-065–T-082); Group service (T-075) confirmed as the epic's load-bearing task. |
+| 2026-08-19 | Noted task-level dependency pattern for EPIC-006/007 (Location) now that real tasks exist (T-083–T-097); Product-at-Location core/QoH-write command (T-089) confirmed as the epic's load-bearing task. Flagged the one real cross-module dependency: T-092 (kit-quantity propagation) needs Products' Kit Component interface, not yet built (Products not yet JIT'd) — Location's own side is stubbed and unit-tested now, full integration deferred to Products' Backend/API epic (EPIC-009). |

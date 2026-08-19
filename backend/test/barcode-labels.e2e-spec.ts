@@ -17,9 +17,12 @@ interface LoginResponseBody {
 describe('Users module — barcode labels (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let roleId: string;
-  let adminRoleId: string;
-  let userId: string;
+  // ADR-200 — `Role.id`/`User.id` are internal bigint, only used for this test's own direct Prisma
+  // setup/teardown calls. `userPublicId` is the wire-facing UUID sent over HTTP and matched against
+  // the barcode-label response's own `userId` field (which the service sets to `user.publicId`).
+  let roleId: bigint;
+  let adminRoleId: bigint;
+  let userPublicId: string;
   let adminAccessToken: string;
   let staffAccessToken: string;
 
@@ -55,7 +58,7 @@ describe('Users module — barcode labels (e2e)', () => {
         status: 'active',
       },
     });
-    userId = staffUser.id;
+    userPublicId = staffUser.publicId;
     await prisma.user.create({
       data: {
         firstName: 'E2E',
@@ -91,14 +94,14 @@ describe('Users module — barcode labels (e2e)', () => {
 
   it('returns the label layout with barcode value and role name for a 3x2 label', async () => {
     const response = await request(app.getHttpServer())
-      .get(`/barcode-labels/${userId}`)
+      .get(`/barcode-labels/${userPublicId}`)
       .query({ size: '3x2' })
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(200);
 
     expect(response.body).toMatchObject({
-      userId,
+      userId: userPublicId,
       name: 'Marcus Whitfield',
       role: 'Warehouse Staff',
       barcodeValue: staffUsername.toUpperCase(),
@@ -109,7 +112,7 @@ describe('Users module — barcode labels (e2e)', () => {
 
   it('rejects an unknown label size (400)', async () => {
     await request(app.getHttpServer())
-      .get(`/barcode-labels/${userId}`)
+      .get(`/barcode-labels/${userPublicId}`)
       .query({ size: '9x9' })
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
@@ -118,7 +121,7 @@ describe('Users module — barcode labels (e2e)', () => {
 
   it('denies a non-Admin from generating a label (403)', async () => {
     await request(app.getHttpServer())
-      .get(`/barcode-labels/${userId}`)
+      .get(`/barcode-labels/${userPublicId}`)
       .query({ size: '3x2' })
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${staffAccessToken}`)

@@ -14,7 +14,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { ChangePasswordDto } from '../auth/dto/change-password.dto';
-import type { JwtPayload } from '../auth/jwt.strategy';
+import type { AuthenticatedUser } from '../auth/jwt.strategy';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 
@@ -57,16 +57,16 @@ export class UsersController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles('Admin')
-  create(@Body() dto: CreateUserDto, @Req() req: Request & { user?: JwtPayload }) {
-    return this.users.create(dto, req.user?.sub ?? null);
+  create(@Body() dto: CreateUserDto, @Req() req: Request & { user?: AuthenticatedUser }) {
+    return this.users.create(dto, req.user?.internalId ?? null);
   }
 
   @Patch('me')
-  updateSelf(@Body() dto: UpdateUserDto, @Req() req: Request & { user?: JwtPayload }) {
+  updateSelf(@Body() dto: UpdateUserDto, @Req() req: Request & { user?: AuthenticatedUser }) {
     // Self-service — status/role changes are ignored here at the DTO's own field set boundary
     // in the real system's field-level permission gate; for this MVP slice, no additional
     // enforcement beyond "you may only edit your own record" (Admin edits others via PATCH /:id).
-    return this.users.update(req.user!.sub, dto, req.user!.sub);
+    return this.users.update(req.user!.sub, dto, req.user!.internalId);
   }
 
   @Patch(':id')
@@ -75,9 +75,9 @@ export class UsersController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
-    @Req() req: Request & { user?: JwtPayload },
+    @Req() req: Request & { user?: AuthenticatedUser },
   ) {
-    return this.users.update(id, dto, req.user?.sub ?? null);
+    return this.users.update(id, dto, req.user?.internalId ?? null);
   }
 
   @Delete(':id')
@@ -88,11 +88,11 @@ export class UsersController {
   }
 
   @Post('me/password')
-  changeOwnPassword(@Body() dto: ChangePasswordDto, @Req() req: Request & { user?: JwtPayload }) {
+  changeOwnPassword(@Body() dto: ChangePasswordDto, @Req() req: Request & { user?: AuthenticatedUser }) {
     return this.users.changePassword(
       req.user!.sub,
       dto.newPassword,
-      req.user!.sub,
+      req.user!.internalId,
       dto.oldPassword,
     );
   }
@@ -103,8 +103,8 @@ export class UsersController {
   resetPassword(
     @Param('id') id: string,
     @Body() dto: ChangePasswordDto,
-    @Req() req: Request & { user?: JwtPayload },
+    @Req() req: Request & { user?: AuthenticatedUser },
   ) {
-    return this.users.changePassword(id, dto.newPassword, req.user?.sub ?? null);
+    return this.users.changePassword(id, dto.newPassword, req.user?.internalId ?? null);
   }
 }

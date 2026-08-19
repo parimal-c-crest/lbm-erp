@@ -2,17 +2,29 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 
 import { EntityIdentifier } from '../../common/value-objects/entity-identifier';
 import { TenantContextService } from '../../tenant/tenant-context.service';
+import { resolveUserId, toPublicEntity } from '../shared/public-id.util';
 
 import type { CreateTypeDto } from './dto/create-type.dto';
 import type { UpdateTypeDto } from './dto/update-type.dto';
 
+const WITH_CATEGORY = { category: { select: { publicId: true } } };
+
 // UOMType CRUD (T-074, `8-api.md` `/uom/types*`, BR-010). `categoryId` is optional (ADR-192).
+//
+// ADR-200 — `categoryId` on the wire is (and stays) the referenced Category's publicId (UUID), the
+// pre-existing documented shape (`frontend/src/types/uom.ts`'s `UOMType.categoryId`); internally it
+// is now a bigint FK, resolved both ways at this service's boundary.
 @Injectable()
 export class TypesService {
   constructor(private readonly tenantContext: TenantContextService) {}
 
   private get prisma() {
     return this.tenantContext.prisma;
+  }
+
+  private toPublic(type: { category?: { publicId: string } | null } & Record<string, unknown>) {
+    const { category, ...rest } = type;
+    return { ...toPublicEntity(rest as never), categoryId: category?.publicId ?? null };
   }
 
   async list(params: { search?: string; skip?: number; take?: number }) {
@@ -26,63 +38,76 @@ export class TypesService {
         skip: params.skip ?? 0,
         take: params.take ?? 20,
         orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        include: WITH_CATEGORY,
       }),
       this.prisma.uOMType.count({ where }),
     ]);
-    return { items, total };
+    return { items: items.map((item) => this.toPublic(item)), total };
   }
 
-  async findById(id: string) {
-    const identifier = EntityIdentifier.from(id);
+  private async findEntityByPublicId(publicId: string) {
     const type = await this.prisma.uOMType.findFirst({
-      where: { id: identifier.value, isDeleted: false },
+      where: { publicId, isDeleted: false },
+      include: WITH_CATEGORY,
     });
     if (!type) throw new NotFoundException('Type not found.');
     return type;
   }
 
+  async findById(id: string) {
+    const identifier = EntityIdentifier.from(id);
+    const type = await this.findEntityByPublicId(identifier.value);
+    return this.toPublic(type);
+  }
+
   async create(dto: CreateTypeDto, userId?: string) {
     await this.assertNameAvailable(dto.name);
-    if (dto.categoryId) await this.assertCategoryActive(dto.categoryId);
-    return this.prisma.uOMType.create({
+    const categoryId = dto.categoryId ? await this.resolveCategoryId(dto.categoryId) : undefined;
+    const actorId = await resolveUserId(this.prisma, userId);
+    const created = await this.prisma.uOMType.create({
       data: {
         name: dto.name,
-        categoryId: dto.categoryId,
+        categoryId,
         sortOrder: dto.sortOrder,
-        createdBy: userId,
-        updatedBy: userId,
+        createdBy: actorId,
+        updatedBy: actorId,
       },
+      include: WITH_CATEGORY,
     });
+    return this.toPublic(created);
   }
 
   async update(id: string, dto: UpdateTypeDto, userId?: string) {
     const identifier = EntityIdentifier.from(id);
-    await this.findById(identifier.value);
-    if (dto.name) await this.assertNameAvailable(dto.name, identifier.value);
-    if (dto.categoryId) await this.assertCategoryActive(dto.categoryId);
-    return this.prisma.uOMType.update({
-      where: { id: identifier.value },
+    const existing = await this.findEntityByPublicId(identifier.value);
+    if (dto.name) await this.assertNameAvailable(dto.name, existing.id);
+    const categoryId = dto.categoryId ? await this.resolveCategoryId(dto.categoryId) : undefined;
+    const actorId = await resolveUserId(this.prisma, userId);
+    const updated = await this.prisma.uOMType.update({
+      where: { id: existing.id },
       data: {
         name: dto.name,
-        categoryId: dto.categoryId,
+        categoryId,
         sortOrder: dto.sortOrder,
-        updatedBy: userId,
+        updatedBy: actorId,
       },
+      include: WITH_CATEGORY,
     });
+    return this.toPublic(updated);
   }
 
   // BR-014 (in-use guard across Base Type/Role Assignment/Conversion Factor/Picking Hierarchy
   // references) + BR-016 (Pricing fixed-price-override cascade, stubbed — see note below).
   async remove(id: string) {
     const identifier = EntityIdentifier.from(id);
-    await this.findById(identifier.value);
+    const existing = await this.findEntityByPublicId(identifier.value);
 
     const [baseCount, roleCount, factorCount, pickingCount] = await Promise.all([
-      this.prisma.uOMGroup.count({ where: { baseTypeId: identifier.value, isDeleted: false } }),
-      this.prisma.uOMRoleAssignment.count({ where: { typeId: identifier.value } }),
-      this.prisma.uOMConversionFactor.count({ where: { typeId: identifier.value } }),
+      this.prisma.uOMGroup.count({ where: { baseTypeId: existing.id, isDeleted: false } }),
+      this.prisma.uOMRoleAssignment.count({ where: { typeId: existing.id } }),
+      this.prisma.uOMConversionFactor.count({ where: { typeId: existing.id } }),
       this.prisma.uOMPickingHierarchy.count({
-        where: { typeId: identifier.value, isDeleted: false },
+        where: { typeId: existing.id, isDeleted: false },
       }),
     ]);
     const reasons: string[] = [];
@@ -101,23 +126,28 @@ export class TypesService {
     // TODO(Pricing module): once Pricing's own service exists, call its cascade-delete API here.
 
     await this.prisma.uOMType.update({
-      where: { id: identifier.value },
+      where: { id: existing.id },
       data: { isDeleted: true, deletedAt: new Date() },
     });
     return { deleted: true };
   }
 
-  private async assertNameAvailable(name: string, excludeId?: string) {
+  private async assertNameAvailable(name: string, excludeId?: bigint) {
     const existing = await this.prisma.uOMType.findFirst({
       where: { name, isDeleted: false, ...(excludeId ? { id: { not: excludeId } } : {}) },
     });
     if (existing) throw new ConflictException('Type name is required and must be unique.');
   }
 
-  private async assertCategoryActive(categoryId: string) {
+  // Resolves a client-supplied Category publicId (UUID) to its internal bigint id (ADR-200) and
+  // confirms it is a live (non-deleted) Category — the pre-existing `assertCategoryActive` guard,
+  // now doubling as the FK-resolution step every write into `categoryId` needs.
+  private async resolveCategoryId(categoryPublicId: string): Promise<bigint> {
     const category = await this.prisma.uOMCategory.findFirst({
-      where: { id: categoryId, isDeleted: false },
+      where: { publicId: categoryPublicId, isDeleted: false },
+      select: { id: true },
     });
     if (!category) throw new ConflictException('Referenced Category does not exist.');
+    return category.id;
   }
 }

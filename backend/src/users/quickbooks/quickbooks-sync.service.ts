@@ -6,6 +6,10 @@ import { TenantContextService } from '../../tenant/tenant-context.service';
 
 import { QUICKBOOKS_SYNC_QUEUE } from './quickbooks.constants';
 
+// `userId` here is the User's `public_id` (ADR-200) — BullMQ job data is JSON-serialized, and a
+// raw internal bigint `id` neither survives that serialization nor belongs on a queue payload
+// (internal-only per ADR-200). The processor resolves it back to the internal `id` once, on
+// pickup.
 export interface QuickBooksSyncJobPayload {
   userId: string;
   tenantSubdomain: string;
@@ -26,15 +30,27 @@ export class QuickBooksSyncService {
     await this.queue.add('sync-user', { userId, tenantSubdomain: this.tenantContext.subdomain });
   }
 
-  listStatus() {
-    return this.tenantContext.prisma.user.findMany({
+  // ADR-200 — selects `publicId` (never the internal bigint `id`/`userId`) for both the User and
+  // its `QuickBooksSyncPointer` (a shared-PK 1:1 extension with no `publicId` of its own — its
+  // `userId` FK is internal-only and must not reach the response either).
+  async listStatus() {
+    const users = await this.tenantContext.prisma.user.findMany({
       where: { isDeleted: false },
       select: {
-        id: true,
+        publicId: true,
         firstName: true,
         lastName: true,
-        quickBooksSync: true,
+        quickBooksSync: {
+          select: {
+            qbListId: true,
+            qbEditSequence: true,
+            status: true,
+            errorMessage: true,
+            lastSyncedAt: true,
+          },
+        },
       },
     });
+    return users.map(({ publicId, ...rest }) => ({ ...rest, id: publicId }));
   }
 }

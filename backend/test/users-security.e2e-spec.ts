@@ -20,9 +20,11 @@ interface LoginResponseBody {
 describe('Users module — security regression tests (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let adminRoleId: string;
+  let adminRoleId: bigint;
+  let adminRolePublicId: string;
   let adminAccessToken: string;
-  let createdUserIds: string[] = [];
+  let adminUserPublicId: string;
+  let createdUserIds: bigint[] = [];
 
   const adminUsername = 'e2e-security-admin';
   const password = 'CorrectHorse1';
@@ -40,6 +42,7 @@ describe('Users module — security regression tests (e2e)', () => {
     prisma = app.get(PrismaService);
     const adminRole = await prisma.role.create({ data: { name: 'Admin', depth: 0 } });
     adminRoleId = adminRole.id;
+    adminRolePublicId = adminRole.publicId;
     const passwordHash = await bcrypt.hash(password, 10);
     const adminUser = await prisma.user.create({
       data: {
@@ -53,6 +56,7 @@ describe('Users module — security regression tests (e2e)', () => {
       },
     });
     createdUserIds = [adminUser.id];
+    adminUserPublicId = adminUser.publicId;
 
     const login = await request(app.getHttpServer())
       .post('/auth/login')
@@ -77,7 +81,7 @@ describe('Users module — security regression tests (e2e)', () => {
       .delete('/users/not-a-real-uuid')
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
-      .send({ transferToUserId: createdUserIds[0] })
+      .send({ transferToUserId: adminUserPublicId })
       .expect(400);
 
     expect((response.body as { message: string }).message).toContain('valid UUID');
@@ -85,10 +89,10 @@ describe('Users module — security regression tests (e2e)', () => {
 
   it('rejects deleting the organization-s last remaining Admin (USR-RISK-020)', async () => {
     await request(app.getHttpServer())
-      .delete(`/users/${createdUserIds[0]}`)
+      .delete(`/users/${adminUserPublicId}`)
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
-      .send({ transferToUserId: createdUserIds[0] })
+      .send({ transferToUserId: adminUserPublicId })
       .expect(409);
   });
 
@@ -103,7 +107,7 @@ describe('Users module — security regression tests (e2e)', () => {
         username: adminUsername, // collides with the seeded admin
         email: 'e2e-security-dup@skeleton.local',
         password: 'CorrectHorse1',
-        roleId: adminRoleId,
+        roleId: adminRolePublicId,
       })
       .expect(409);
   });
@@ -124,7 +128,7 @@ describe('Users module — security regression tests (e2e)', () => {
     expect(stillHasUsersTable).not.toBeNull();
 
     const record = await prisma.timeClockRecord.findUnique({
-      where: { id: (response.body as { id: string }).id },
+      where: { publicId: (response.body as { id: string }).id },
       include: { taskDetails: true },
     });
     expect(record?.taskDetails[0]?.task).toBe(injectionPayload);

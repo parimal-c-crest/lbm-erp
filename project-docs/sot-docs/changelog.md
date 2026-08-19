@@ -82,3 +82,44 @@ same-session, immediately-resolved drafting-time catch rather than a standing un
 **Glossary:** no new terms required addition — UOM introduces module-internal entity names
 (`UOMFunctionalRole`, `UOMTypeFactorHistory`, etc.) already fully defined within
 `docs-kit/5-modules/uom/` itself; none are cross-cutting terms the project-wide glossary needs.
+
+## 2026-08-19 — Location module per-module run (M3 foundation module, third module through the JIT cycle)
+
+**Promoted to `docs-kit/` and indexed as authoritative:**
+- `5-modules/location/` (11 docs) — approved 2026-08-19. Field-extraction surfaced 3 Blocking open
+  questions (B-1 reorder-formula unrecoverable, B-2 uncatalogued field, B-3 undefined delete
+  behavior), all resolved with the developer and locked as ADR-196 (fresh reorder-point formula)
+  and ADR-197 (no hard delete, Active/Inactive toggle only). Drafting the 11 documents then
+  surfaced 10 further `[NEEDS INPUT]` items, bundled and resolved as ADR-198. `11-testing.md` was
+  initially rejected on review (missing template-required §8 UI Tests section, a mis-numbered extra
+  section, and one ADR-198 resolution — the 14-day Avg Lead Time fallback — never applied to
+  TC-019); fixed in place and approved same session. See `review-log.md` for the full verdict
+  trail.
+- `6-development/` late wave (4 docs: implementation-workflow, testing-strategy,
+  deployment-strategy, debugging-guide) — updated to v1.1, folding in Location's implementation
+  phasing, cross-module chain tests, and stock-discrepancy debugging checklist alongside Users' and
+  UOM's existing content. Approved 2026-08-19.
+
+**Archived (superseded raw material, moved whole and unmodified, never deleted):**
+- `raw/2-module-specs/Location/*` (11 files) → `archive/2-module-specs/Location/` (superseded by
+  `docs-kit/5-modules/location/*`). Field-extraction adaptation used this raw blueprint directly as
+  Origin 1 source material, per this project's standing practice of reusing an already-exhaustive
+  legacy extraction rather than re-reading live legacy code/DB from scratch.
+
+**Not archived / still authoritative:**
+- 15 remaining raw `2-module-specs/` module folders — each promotes only when that module goes
+  through its own JIT documentation cycle, same as Users, UOM, and Location just did.
+- `raw/1-business-requirements/glossary.md`, `module-breakdown.md`, `non-functional-requirements.md`,
+  `scope.md`, `stakeholders.md`, `assumptions-and-constraints.md` — unchanged from the prior entry.
+
+**Conflicts check:** no unresolved conflict found between the newly promoted documents and the
+remaining SoT. Location's nav placement (moving from top-level sidebar into Settings, matching
+UOM's own precedent) was locked as a new decision, ADR-195, before this module's JIT cycle began —
+`4-ui/1-navigation.md`'s top-level-item count is now stale (still shows 10, and never got updated
+for UOM's own Settings move either) — flagged as a known, pre-existing gap, not resolved here since
+`4-ui/` documents are only updated via their own draft→review→promote flow, not as a side effect of
+a module's own JIT cycle.
+
+**Glossary:** no new terms required addition — Location introduces module-internal entity names
+(`ProductAtLocation`, `LocationAccountingConfig`, etc.) already fully defined within
+`docs-kit/5-modules/location/` itself; none are cross-cutting terms the project-wide glossary needs.

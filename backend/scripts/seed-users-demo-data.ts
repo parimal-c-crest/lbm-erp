@@ -199,7 +199,7 @@ async function main() {
   const prisma = new PrismaClient({ adapter });
 
   // --- Roles + 2FA requirements ---------------------------------------------------------
-  const roleIdByKey = new Map<string, string>();
+  const roleIdByKey = new Map<string, bigint>();
   for (const role of ROLES) {
     const created = await prisma.role.upsert({
       where: { name: role.name },
@@ -263,7 +263,7 @@ async function main() {
   // --- Users ------------------------------------------------------------------------------
   const takenUsernames = new Set<string>();
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, BCRYPT_ROUNDS);
-  const userIdByName = new Map<string, string>();
+  const userIdByName = new Map<string, bigint>();
 
   for (const seedUser of USERS) {
     const username = usernameFor(seedUser.firstName, seedUser.lastName, takenUsernames);
@@ -300,11 +300,11 @@ async function main() {
   for (const role of ROLES) {
     const roleId = roleIdByKey.get(role.key)!;
     const existingMembership = await prisma.groupMembership.findFirst({
-      where: { groupId: allStaffGroup.id, memberType: 'ROLE', memberId: roleId },
+      where: { groupId: allStaffGroup.id, memberType: 'ROLE', memberId: roleId.toString() },
     });
     if (!existingMembership) {
       await prisma.groupMembership.create({
-        data: { groupId: allStaffGroup.id, memberType: 'ROLE', memberId: roleId },
+        data: { groupId: allStaffGroup.id, memberType: 'ROLE', memberId: roleId.toString() },
       });
     }
   }

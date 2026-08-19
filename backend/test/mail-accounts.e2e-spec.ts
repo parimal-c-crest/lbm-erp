@@ -14,8 +14,11 @@ interface LoginResponseBody {
 describe('Users module — mail account (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let roleId: string;
-  let userId: string;
+  // ADR-200 — `Role.id` is a normal dual-key model's internal bigint. `MailAccount` is one of the
+  // documented exceptions with no `publicId` at all — its PK is `userId` itself (`User.id`,
+  // internal bigint) — so `userId` here stays bigint throughout, matching `mail-accounts.service.ts`.
+  let roleId: bigint;
+  let userId: bigint;
   let accessToken: string;
 
   const username = 'e2e-mailaccount-user';

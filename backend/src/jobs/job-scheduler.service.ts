@@ -7,6 +7,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { computeStaggeredCronPattern } from './compute-schedule';
 import { CRON_JOBS_QUEUE } from './jobs.constants';
 
+// `jobDefinitionId` is the JobDefinition's `public_id` (ADR-200) — BullMQ job data is
+// JSON-serialized, and a raw internal bigint `id` neither survives that serialization nor
+// belongs on a queue payload (internal-only per ADR-200). `JobRunProcessor` resolves it back to
+// the internal `id` once, on pickup.
 export interface CronJobPayload {
   jobDefinitionId: string;
   tenantSubdomain: string;
@@ -54,7 +58,10 @@ export class JobSchedulerService implements OnModuleInit {
         );
         desired.set(id, {
           pattern,
-          payload: { jobDefinitionId: definition.id, tenantSubdomain: schedule.tenantSubdomain },
+          payload: {
+            jobDefinitionId: definition.publicId,
+            tenantSubdomain: schedule.tenantSubdomain,
+          },
         });
       }
     }

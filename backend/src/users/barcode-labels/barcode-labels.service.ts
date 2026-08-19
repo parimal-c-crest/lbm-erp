@@ -28,13 +28,13 @@ export class BarcodeLabelsService {
   async generate(userId: string, size: LabelSize) {
     const identifier = EntityIdentifier.from(userId);
     const user = await this.prisma.user.findFirst({
-      where: { id: identifier.value, isDeleted: false },
+      where: { publicId: identifier.value, isDeleted: false },
       include: { role: true },
     });
     if (!user) throw new NotFoundException('User not found.');
 
     return {
-      userId: user.id,
+      userId: user.publicId,
       name: [user.firstName, user.lastName].filter(Boolean).join(' '),
       role: user.role?.name ?? null,
       barcodeValue: user.username.toUpperCase(),

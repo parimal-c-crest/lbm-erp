@@ -16,11 +16,11 @@
 | Project Name | LBM ERP Rewrite |
 | Workflow Scope | Feature Development (per-module, JIT-documented) |
 | Development Methodology | Solo developer + AI-assisted (Claude Code), JIT-documented per module — not a formal Scrum/Kanban ceremony set [Source: `CLAUDE.md` "Workflow entry point"; `1-project/4-tech-stack.md` §9] |
-| Version | 1.0 (late wave — first run, folding in Users and UOM) |
+| Version | 1.1 (late wave — second run, folding in Location alongside Users and UOM) |
 | Status | Draft |
 | Author | Claude Code (docs-kit generation) |
 | Created Date | 2026-08-18 |
-| Last Updated | 2026-08-18 |
+| Last Updated | 2026-08-19 |
 
 ---
 
@@ -31,10 +31,19 @@ Every module in this project follows the same lifecycle: an approved module spec
 (`5-modules/<slug>/10-implementation-plan.md`), which is then executed phase-by-phase against this
 project's already-locked architecture (`6-development/2-folder-structure.md`), coding standards
 (`6-development/3-coding-standards.md`), and Git workflow (`6-development/4-git-workflow.md`). This
-document generalizes the pattern the two already-built modules — **Users** (M3's first module,
-19 backend tasks/T-046–T-064, fully Done) and **UOM** (documented, not yet implemented) — both
-follow at the `5-modules/` layer, restating it as the project-wide standard rather than
-re-deriving it per module.
+document generalizes the pattern the three already-documented modules — **Users** (M3's first
+module, 19 backend tasks/T-046–T-064, fully Done), **UOM** (documented and implemented), and
+**Location** (documented, not yet implemented — approved this run) — follow at the `5-modules/`
+layer, restating it as the project-wide standard rather than re-deriving it per module.
+
+- **Location's own shape**: unlike Users (security/RBAC-heavy) and UOM (a small, bounded
+  foundational reference-data module), Location's own `10-implementation-plan.md` is explicit that
+  it is **"not independently phaseable the way a more bounded module can be"** — its QoH-write core
+  (Phase 3) is a hard prerequisite every other transactional module's own inventory-scoping logic
+  needs, and its own build sequencing follows `sot-docs/raw/2-module-specs/Location/
+  build-guidance.md` §Suggested Build Sequencing directly (9 phases) rather than the generic
+  document-order default — the first module in this project to have its phase order sourced from a
+  dedicated build-guidance document rather than derived solely from its own `10-implementation-plan.md`.
 
 - **Development lifecycle**: `2-document-generate` (module docs) → `4-document-review` (module docs
   approved) → this module's own late-wave fold-in (this document) → `7-sprint-planning` (tasks
@@ -187,7 +196,14 @@ Estimate, per phase:
 - Dependencies — a module's plan states whether any other module blocks it (UOM: "No cross-module
   Backend/API dependency blocks UOM within M3" — Users, Location, Products, UOM are scheduled
   together with no dependency among themselves, `plan/dependencies.md`) and whether that module's
-  own UI-Design epic must precede its Backend/API epic (UOM: `UI_UOM --> BE_UOM`).
+  own UI-Design epic must precede its Backend/API epic (UOM: `UI_UOM --> BE_UOM`). **Location is the
+  first module whose plan names a genuine, partially-blocking cross-module dependency rather than a
+  clean "no dependency"**: BR-024's calls into UOM's conversion service require UOM to exist first
+  (satisfied — UOM ships alongside Location in M3), and Phase 6's kit-quantity-as-computed service
+  (BR-009) needs Products' own Kit Component interface, which had not yet been through its own JIT
+  cycle at the time Location's plan was drafted — the plan's own stated mitigation is to build the
+  Location-side contract now and integration-test it once Products' interface is confirmed, rather
+  than blocking Location's entire build on Products.
 
 A module's implementation plan additionally opens with a **decision-confirmation phase** where the
 module has a substantial set of pre-existing locked ADRs a first documentation pass might not have
@@ -195,7 +211,15 @@ fully consulted — Users' Phase 1 is the concrete precedent ("not open decision
 in `decisions-log.md`, listed here only so implementation has one checklist confirming each was
 actually read"). This phase exists specifically because Users' v1.0 plan incorrectly treated 8
 already-locked ADRs as open decisions requiring SME sign-off — a real process failure this workflow
-now names explicitly so it doesn't recur silently in a future module (§17).
+now names explicitly so it doesn't recur silently in a future module (§17). **Location's own Phase 1
+is the third instance of this pattern**, and folds in a second sub-case: this JIT drafting pass's own
+originally-blocking `[NEEDS INPUT: ...]` questions (BR-011's cost-recompute formula, BR-015's
+Projected Next Use Date formula, BR-016's no-history Avg Lead Time fallback, BR-018's safety-stock
+method, Underspecified enum value lists, branch-name-uniqueness case sensitivity, GL-mapping storage
+shape, the permissions role-split question) are all resolved by **ADR-198** (plus ADR-196/197) —
+Location's Phase 1 is a build-time confirmation that each resolution was actually read and reflected
+in the document it governs, the same discipline Users' Phase 1 applies to pre-existing ADRs, applied
+here to ADRs locked during the module's own JIT drafting round instead.
 
 ---
 
@@ -227,7 +251,16 @@ prerequisite is built before what depends on it — Users' Phase 3 (Auth/session
 explicitly marked "the hard prerequisite every other module's own authorization testing needs,"
 built before Phase 4's delete-family hardening even though both are early phases. Later modules'
 phase ordering should make the same kind of dependency explicit rather than defaulting to numeric
-document order alone.
+document order alone. **Location's own plan is the clearest instance of this discipline to date**:
+its 9 phases follow `build-guidance.md` §Suggested Build Sequencing verbatim — Phase 2 (core schema)
+before Phase 3 (**QoH core** — the single shared QoH-write command every other transactional
+module's own inventory-scoping logic needs), and Phase 3 before Phase 4 (**security hardening** —
+closing all six confirmed legacy SQL-injection points by construction) specifically so the
+commands that would misuse an unclosed injection point (kit adjustment, part supersession, the Lost
+Sale Log Report, the Cost Detail tooltip) don't get built against a still-open hole. This
+QoH-core-before-security-hardening ordering is named explicitly in Location's own plan as
+deliberate, not incidental — a concrete second example (after Users' Phase-3-before-Phase-4
+pattern) of a module sequencing around a real dependency rather than numeric document order.
 
 ---
 
@@ -498,9 +531,10 @@ Mitigation, generally:
 - `6-development/10-debugging-guide.md` (this same late wave)
 - `5-modules/users/1-module.md`, `5-modules/users/10-implementation-plan.md`
 - `5-modules/uom/1-module.md`, `5-modules/uom/10-implementation-plan.md`
+- `5-modules/location/1-module.md`, `5-modules/location/10-implementation-plan.md`
 - `7-sprint-planning/1-sprint-planning.md` (step 2a, this document's own generation trigger)
 - `decisions-log.md` (ADR-002, ADR-006, ADR-053, ADR-056, ADR-074, ADR-078, ADR-081, ADR-098,
-  ADR-134, ADR-154–157, ADR-174, ADR-190–192)
+  ADR-134, ADR-154–157, ADR-174, ADR-190–192, ADR-146–153, ADR-195–198)
 
 ---
 
@@ -509,6 +543,7 @@ Mitigation, generally:
 | Version | Date | Author | Description |
 |----------|------|--------|-------------|
 | 1.0 | 2026-08-18 | Claude Code (docs-kit generation) | Initial Draft — first late-wave run, folding in both Users and UOM (the two modules approved to date). |
+| 1.1 | 2026-08-19 | Claude Code (docs-kit generation) | Second late-wave run — folded in Location: the QoH-core-before-security-hardening phase ordering (§7), the partially-blocking Products/Kit-Component cross-module dependency (§6), and Location's own Phase 1 decision-confirmation pattern covering ADR-196/197/198 (§6). |
 
 ---
 
@@ -536,3 +571,8 @@ Mitigation, generally:
 - On the next module to trigger this late wave, this document should gain that module's own concrete
   phase example wherever a section currently draws only on Users/UOM, per
   `3-document-generate/06-development/development.md` Instruction 7 (fold in, don't overwrite).
+- This second late-wave run adds Location's own concrete examples (§1, §6, §7) alongside, not in
+  place of, Users' and UOM's — Location is the first module whose own build-guidance document
+  (`sot-docs/raw/2-module-specs/Location/build-guidance.md`) directly sources its implementation
+  plan's phase order, and the first to carry a genuine partially-blocking cross-module dependency
+  (Products' Kit Component interface) rather than a clean "no dependency" statement.

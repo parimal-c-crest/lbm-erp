@@ -17,8 +17,10 @@ interface LoginResponseBody {
 describe('Users module — personal days (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let roleId: string;
-  let userId: string;
+  // ADR-200 — `Role.id`/`User.id` are internal bigint, only used for this test's own direct Prisma
+  // setup/teardown calls (and FK columns like `TimeClockRecord.userId`), never sent over the wire.
+  let roleId: bigint;
+  let userId: bigint;
   let accessToken: string;
 
   const username = 'e2e-personalday-user';
