@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 
 import { ConcurrencyLockService } from '../../common/locks/concurrency-lock.service';
+import { toPublicEntity } from '../../common/utils/public-entity.util';
 import { EntityIdentifier } from '../../common/value-objects/entity-identifier';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 
@@ -21,6 +22,12 @@ const OVERRIDE_LOCK_RESOURCE = 'timeclock-override';
 // Time Clock state machine (`3-business-rules.md` §6): `(none) → CLOCK IN → CLOCK OUT`. A
 // second clock-in while a punch is open is rejected (409) — the new design's own guard, closing
 // the legacy system's confirmed absence of one.
+//
+// ADR-200: `userId`/`actorId` parameters below are internal bigint `id`s — controllers pass
+// `request.user.internalId`, already resolved once per request. `recordId` (the TimeClockRecord
+// being locked/overridden) is the client-supplied `public_id`; the Redis lock key is keyed on
+// that opaque string consistently across acquire/heartbeat/release, and resolved to the row's
+// real internal `id` only where a DB write is needed (`override`).
 @Injectable()
 export class TimeclockService {
   constructor(
@@ -32,7 +39,7 @@ export class TimeclockService {
     return this.tenantContext.prisma;
   }
 
-  async clockIn(userId: string, dto: ClockInDto) {
+  async clockIn(userId: bigint, dto: ClockInDto) {
     const open = await this.prisma.timeClockRecord.findFirst({
       where: { userId, status: 'clock_in' },
     });
@@ -41,7 +48,7 @@ export class TimeclockService {
     }
 
     const now = new Date();
-    return this.prisma.timeClockRecord.create({
+    const record = await this.prisma.timeClockRecord.create({
       data: {
         userId,
         clockIn: now,
@@ -52,10 +59,12 @@ export class TimeclockService {
             ? { create: [{ laborStatus: dto.laborStatus ?? 'working', task: dto.task }] }
             : undefined,
       },
+      include: { user: { select: { publicId: true } } },
     });
+    return toPublicRecord(record);
   }
 
-  async clockOut(userId: string) {
+  async clockOut(userId: bigint) {
     const open = await this.prisma.timeClockRecord.findFirst({
       where: { userId, status: 'clock_in' },
     });
@@ -63,23 +72,25 @@ export class TimeclockService {
       throw new NotFoundException('No open punch found for this user.');
     }
 
-    return this.prisma.timeClockRecord.update({
+    const record = await this.prisma.timeClockRecord.update({
       where: { id: open.id },
       data: { clockOut: new Date(), status: 'clock_out' },
+      include: { user: { select: { publicId: true } } },
     });
+    return toPublicRecord(record);
   }
 
   // Concurrent-edit lock (ADR-079/080/084) — acquired before an admin/manager starts editing a
   // punch, so a second user opening the same record is blocked with a detailed "currently being
   // edited by X" message rather than silently racing to save. `heldByName` is resolved fresh
   // from the User table here, not cached in Redis alongside the lock, so it can never go stale.
-  async lockOverride(recordId: string, userId: string) {
+  async lockOverride(recordId: string, userId: bigint) {
     const identifier = EntityIdentifier.from(recordId);
-    const result = await this.locks.acquire(OVERRIDE_LOCK_RESOURCE, identifier.value, userId);
+    const result = await this.locks.acquire(OVERRIDE_LOCK_RESOURCE, identifier.value, userId.toString());
     if (result.acquired) return { acquired: true as const };
 
     const holder = result.heldByUserId
-      ? await this.prisma.user.findUnique({ where: { id: result.heldByUserId } })
+      ? await this.prisma.user.findUnique({ where: { id: BigInt(result.heldByUserId) } })
       : null;
     const holderName = holder
       ? [holder.firstName, holder.lastName].filter(Boolean).join(' ')
@@ -87,16 +98,20 @@ export class TimeclockService {
     throw new ConflictException(`Currently being edited by ${holderName}, locked for you.`);
   }
 
-  async heartbeatOverrideLock(recordId: string, userId: string) {
+  async heartbeatOverrideLock(recordId: string, userId: bigint) {
     const identifier = EntityIdentifier.from(recordId);
-    const renewed = await this.locks.heartbeat(OVERRIDE_LOCK_RESOURCE, identifier.value, userId);
+    const renewed = await this.locks.heartbeat(
+      OVERRIDE_LOCK_RESOURCE,
+      identifier.value,
+      userId.toString(),
+    );
     if (!renewed) throw new ConflictException('Lock is no longer held by you.');
     return { renewed: true as const };
   }
 
-  async releaseOverrideLock(recordId: string, userId: string) {
+  async releaseOverrideLock(recordId: string, userId: bigint) {
     const identifier = EntityIdentifier.from(recordId);
-    await this.locks.release(OVERRIDE_LOCK_RESOURCE, identifier.value, userId);
+    await this.locks.release(OVERRIDE_LOCK_RESOURCE, identifier.value, userId.toString());
     return { released: true as const };
   }
 
@@ -106,16 +121,20 @@ export class TimeclockService {
   // check). Requires the caller to hold the concurrent-edit lock (ADR-079/080/084) — releases it
   // instantly on a successful save, matching ADR-079's "releases the moment the editor leaves
   // edit mode" behavior.
-  async override(dto: OverrideTimeClockDto, actorId: string) {
+  async override(dto: OverrideTimeClockDto, actorId: bigint) {
     const identifier = EntityIdentifier.from(dto.recordId);
 
-    const holdsLock = await this.locks.isHeldBy(OVERRIDE_LOCK_RESOURCE, identifier.value, actorId);
+    const holdsLock = await this.locks.isHeldBy(
+      OVERRIDE_LOCK_RESOURCE,
+      identifier.value,
+      actorId.toString(),
+    );
     if (!holdsLock) {
       throw new ConflictException('You must hold the edit lock before submitting an override.');
     }
 
-    const record = await this.prisma.timeClockRecord.findUnique({
-      where: { id: identifier.value },
+    const record = await this.prisma.timeClockRecord.findFirst({
+      where: { publicId: identifier.value },
     });
     if (!record) {
       throw new NotFoundException('Time clock record not found.');
@@ -128,15 +147,25 @@ export class TimeclockService {
     }
 
     const updated = await this.prisma.timeClockRecord.update({
-      where: { id: identifier.value },
+      where: { id: record.id },
       data: {
         clockIn,
         clockOut,
         status: clockOut ? 'clock_out' : 'clock_in',
       },
+      include: { user: { select: { publicId: true } } },
     });
 
-    await this.locks.release(OVERRIDE_LOCK_RESOURCE, identifier.value, actorId);
-    return updated;
+    await this.locks.release(OVERRIDE_LOCK_RESOURCE, identifier.value, actorId.toString());
+    return toPublicRecord(updated);
   }
+}
+
+// Re-expresses a TimeClockRecord's `userId` FK as the owning User's `publicId` (ADR-200) — the
+// record's own actual owner, not necessarily the caller, so this can't be shortcut with the
+// caller's own JWT `sub`. `toPublicEntity` alone would silently drop `userId` entirely (any
+// bigint field), which is a real API-contract regression, not just cosmetic.
+function toPublicRecord<T extends { user: { publicId: string } }>(record: T) {
+  const { user, ...rest } = record;
+  return { ...toPublicEntity(rest as never), userId: user.publicId };
 }

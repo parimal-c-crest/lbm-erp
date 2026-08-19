@@ -20,7 +20,8 @@
 # 1. Executive Summary
 
 Relational PostgreSQL design, one physically separate database per tenant. Normalized (3NF) schema,
-UUID primary keys, uniform soft-delete and audit columns, no dynamic-field/EAV mechanism anywhere
+dual-key identity (internal `bigint` primary key + external `UUID`), uniform soft-delete and audit
+columns, no dynamic-field/EAV mechanism anywhere
 (closing a confirmed legacy pattern). Major entities group into 15 MVP business domains (SalesOrder,
 Accounts, Users, Location, Products, Vendors, SearchLineItem, Settings, SalesHistory, PurchaseOrder,
 PurchaseLineItem, PurchaseHistory, Pricing, UOM, AccountStatement) plus cross-cutting platform tables
@@ -41,8 +42,12 @@ PostgreSQL, latest stable major version at implementation start. [Source: `1-pro
 - Relational, normalized schema (3NF)
 - **Database-per-tenant** — one physical PostgreSQL database per tenant, not one shared schema with a
   tenant-scoping column. [Source: `decisions-log.md` ADR-056, supersedes ADR-004]
-- UUID (v4) primary keys everywhere — closes the legacy IDOR/enumeration class of finding (guessable
-  auto-increment IDs). [Source: `decisions-log.md` ADR-005]
+- **Dual-key identity everywhere** — an internal `bigint` auto-increment primary key (`id`) that
+  every foreign key references, plus an external `UUID` (`public_id`) that is the only identity
+  ever exposed via API/URL/frontend. Closes the same legacy IDOR/enumeration class of finding
+  (guessable auto-increment IDs) ADR-005 originally closed, while giving joins/indexes bigint-level
+  performance and developers a small, typeable id for debugging. [Source: `decisions-log.md`
+  ADR-200, supersedes ADR-005's single-UUID-PK rule]
 - Soft delete on every table (`is_deleted`/`deleted_at`) — no hard deletes. [Source: `decisions-log.md`
   ADR-005]
 - Uniform audit columns on every table (`created_at`/`updated_at`/`created_by`/`updated_by`), plus a
@@ -66,7 +71,8 @@ PostgreSQL, latest stable major version at implementation start. [Source: `1-pro
 - Soft delete uniform across every table — no per-module variation (the legacy system's inconsistency
   here, e.g. SalesHistory genuinely soft-deletes while Vendors has none, is closed by construction).
   [Source: `decisions-log.md` ADR-005]
-- UUID primary keys, consistent naming (`4-database-standards.md`).
+- Dual-key identity (internal `bigint` PK + external `UUID`), consistent naming
+  (`4-database-standards.md`, **ADR-200**).
 - Physical tenant isolation instead of a shared-schema tenant-scoping column. [Source: `decisions-log.md`
   ADR-056, ADR-073]
 - Append-only event tables plus an optimistic-lock `version` column wherever a derived/accumulated
@@ -162,8 +168,9 @@ High-level cross-domain relationships (full per-module relationships live in eac
 # 7. Naming Conventions
 
 Full naming conventions live in `4-database-standards.md` — not restated here to avoid two documents
-diverging. Summary: `snake_case`, plural table names, UUID `id` primary keys, `<entity>_id` foreign
-keys.
+diverging. Summary: `snake_case`, plural table names, dual-key identity (`id` BIGINT primary key +
+`public_id` UUID external identity, **ADR-200**), `<entity>_id` foreign keys typed BIGINT
+referencing the related table's `id`.
 
 ---
 
@@ -173,11 +180,12 @@ Every table includes, in addition to its business fields:
 
 | Column | Type | Description |
 |----------|------|-------------|
-| `id` | UUID | Primary key (v4) |
+| `id` | BIGINT, `GENERATED ALWAYS AS IDENTITY` | Real primary key; every FK references this, never `public_id` (**ADR-200**) |
+| `public_id` | UUID, unique (not primary) | The only identity exposed via API/URL/frontend (**ADR-200**) |
 | `created_at` | `timestamptz` | Record creation time |
 | `updated_at` | `timestamptz` | Last update time |
-| `created_by` | UUID | FK to `users` |
-| `updated_by` | UUID | FK to `users` |
+| `created_by` | BIGINT | FK to `users.id` |
+| `updated_by` | BIGINT | FK to `users.id` |
 | `is_deleted` | boolean, default `false` | Soft-delete flag |
 | `deleted_at` | `timestamptz`, nullable | Soft-delete timestamp |
 
@@ -192,9 +200,11 @@ PurchaseHistory), it additionally gets a `version` optimistic-lock column and a 
 
 # 9. Constraints
 
-- Primary keys: UUID, every table.
-- Foreign keys: enforced at the database level, `ON DELETE RESTRICT` by default (soft-delete makes hard
-  cascade deletes rare — see `4-database-standards.md` §8 for the specific relationship rules).
+- Primary keys: `id` (BIGINT), every table, per **ADR-200**; `public_id` (UUID) is a separate
+  unique, non-primary column.
+- Foreign keys: enforced at the database level, referencing the related table's `id`
+  (never `public_id`), `ON DELETE RESTRICT` by default (soft-delete makes hard cascade deletes rare
+  — see `4-database-standards.md` §8 for the specific relationship rules).
 - Unique constraints: naturally scoped per-database now (no `(tenant_id, ...)` composite needed — see
   ADR-073).
 - `CHECK` constraints: used wherever a legacy module's field-level validation was confirmed
@@ -322,6 +332,7 @@ history from zero. [Source: `decisions-log.md` ADR-056]
 | Version | Date | Author | Description |
 |----------|------|--------|-------------|
 | 1.0 | 2026-08-17 | Claude Code | Initial draft |
+| 1.1 | 2026-08-19 | Claude Code | ADR-200: dual-key identity — `id` (internal `bigint`, real PK) + `public_id` (external `UUID`, only identity ever exposed) — replaces the single-UUID-PK rule, project-wide. |
 
 ---
 

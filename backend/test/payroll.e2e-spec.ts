@@ -26,9 +26,13 @@ interface PayrollRow {
 describe('Users module — payroll report (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let roleId: string;
-  let adminRoleId: string;
-  let userId: string;
+  // ADR-200 — `Role.id`/`User.id` are internal bigint, only used for this test's own direct Prisma
+  // setup/teardown calls (and FK columns like `TimeClockRecord.userId`), never sent over the wire.
+  let roleId: bigint;
+  let adminRoleId: bigint;
+  let userId: bigint;
+  // `User.publicId` — what the payroll report's response rows key on (`row.userId`).
+  let userPublicId: string;
   let accessToken: string;
   let adminAccessToken: string;
 
@@ -65,6 +69,7 @@ describe('Users module — payroll report (e2e)', () => {
       },
     });
     userId = user.id;
+    userPublicId = user.publicId;
     const adminUser = await prisma.user.create({
       data: {
         firstName: 'E2E',
@@ -123,7 +128,9 @@ describe('Users module — payroll report (e2e)', () => {
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(200);
 
-    const row = (response.body as { rows: PayrollRow[] }).rows.find((r) => r.userId === userId);
+    const row = (response.body as { rows: PayrollRow[] }).rows.find(
+      (r) => r.userId === userPublicId,
+    );
     expect(row?.regular).toBe(8);
     expect(row?.status).toBe('complete');
   });
@@ -147,7 +154,9 @@ describe('Users module — payroll report (e2e)', () => {
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(200);
 
-    const row = (response.body as { rows: PayrollRow[] }).rows.find((r) => r.userId === userId);
+    const row = (response.body as { rows: PayrollRow[] }).rows.find(
+      (r) => r.userId === userPublicId,
+    );
     expect(row?.status).toBe('needs_resolution');
     expect(row?.regular).toBe(0);
   });
@@ -175,7 +184,9 @@ describe('Users module — payroll report (e2e)', () => {
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(200);
 
-    const row = (response.body as { rows: PayrollRow[] }).rows.find((r) => r.userId === userId);
+    const row = (response.body as { rows: PayrollRow[] }).rows.find(
+      (r) => r.userId === userPublicId,
+    );
     expect(row?.regular).toBe(45);
     expect(row?.overtime).toBe(5);
   });
@@ -203,7 +214,9 @@ describe('Users module — payroll report (e2e)', () => {
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(200);
 
-    const row = (response.body as { rows: PayrollRow[] }).rows.find((r) => r.userId === userId);
+    const row = (response.body as { rows: PayrollRow[] }).rows.find(
+      (r) => r.userId === userPublicId,
+    );
     expect(row?.vacation).toBe(8);
   });
 

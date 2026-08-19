@@ -9,7 +9,7 @@
 | Status | Draft |
 | Database | PostgreSQL |
 | Author | Developer (AI-assisted) |
-| Last Updated | 2026-08-18 |
+| Last Updated | 2026-08-19 |
 
 ---
 
@@ -204,90 +204,109 @@ section gives structural columns only.
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
-| id | uuid | No | `gen_random_uuid()` |
+| id | BIGINT | No | `GENERATED ALWAYS AS IDENTITY` (real PK, **ADR-200**) |
+| public_id | UUID | No | `gen_random_uuid()` (external identity, unique not primary, **ADR-200**) |
 | email | varchar | No | — |
 | username | varchar | No | — |
 | password_hash | varchar | No | — |
-| role_id | uuid (FK → roles.id) | Yes | NULL |
+| role_id | BIGINT (FK → roles.id, **ADR-200**) | Yes | NULL |
 | is_super_admin | boolean | No | false |
 | first_name | varchar | No | — |
 | last_name | varchar | Yes | NULL |
 | status | enum(`active`,`inactive`) | No | `active` |
-| default_location_id | uuid (FK → locations.id, Location module) | Yes | NULL |
+| default_location_id | BIGINT (FK → locations.id, Location module, **ADR-200**) | Yes | NULL |
 | *(+ ~30 more contact/address/barcode columns, see `5-data-dictionary.md`)* | | | |
-| created_at / updated_at / created_by / updated_by / is_deleted / deleted_at | per ADR-005 | — | — |
+| created_by / updated_by | BIGINT (FK → users.id, **ADR-200**) | Yes | NULL |
+| created_at / updated_at / is_deleted / deleted_at | per ADR-005 | — | — |
 
-**Primary Key**: `id`. **Foreign Keys**: `role_id → roles.id` (`ON DELETE RESTRICT`),
-`default_location_id → locations.id`. **Indexes**: unique on `email`; unique on `username`.
-**Constraints**: `email` and `username` both unique (real domain invariant — legacy only checked
-username via ADR-157's guard, this design closes the gap for email too).
+**Primary Key**: `id` (real PK, **ADR-200**); `public_id` (UUID) is a separate unique, non-primary
+column, the only identity ever exposed via API/URL/frontend. **Foreign Keys**: `role_id → roles.id`
+(`ON DELETE RESTRICT`), `default_location_id → locations.id`, both referencing the related table's
+`id`, never its `public_id` (**ADR-200**). **Indexes**: unique on `email`; unique on `username`;
+unique on `public_id`. **Constraints**: `email` and `username` both unique (real domain invariant —
+legacy only checked username via ADR-157's guard, this design closes the gap for email too).
 
 ## user_hr_profiles / user_preferences
 
-1:1 child tables, `user_id` PK+FK (`ON DELETE CASCADE`) — full column list in
-`5-data-dictionary.md`.
+1:1 child tables — **shared-PK exception (ADR-200)**: `user_id` is both the PK and the FK to
+`users.id`, retyped `BIGINT`; neither table gets its own `public_id`, since neither is ever
+addressed by its own URL/endpoint — both are read/written only as part of the parent User record.
+`ON DELETE CASCADE`. Full column list in `5-data-dictionary.md`.
 
 ## user_notification_preferences
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
-| id | uuid | No | `gen_random_uuid()` |
-| user_id | uuid (FK → users.id) | No | — |
+| id | BIGINT | No | `GENERATED ALWAYS AS IDENTITY` (real PK, **ADR-200**) |
+| public_id | UUID | No | `gen_random_uuid()` (external identity, unique not primary, **ADR-200**) |
+| user_id | BIGINT (FK → users.id, **ADR-200**) | No | — |
 | notification_type | varchar | No | — |
 | enabled | boolean | No | false |
 
-**Primary Key**: `id`. **Constraints**: unique on `(user_id, notification_type)`.
+**Primary Key**: `id` (real PK, **ADR-200**); `public_id` (UUID) is a separate unique, non-primary
+column. **Constraints**: unique on `(user_id, notification_type)`.
 
 ## roles
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
-| id | uuid | No | `gen_random_uuid()` |
+| id | BIGINT | No | `GENERATED ALWAYS AS IDENTITY` (real PK, **ADR-200**) |
+| public_id | UUID | No | `gen_random_uuid()` (external identity, unique not primary, **ADR-200**) |
 | name | varchar | No | — |
 | description | text | Yes | NULL |
-| parent_role_id | uuid (FK → roles.id, self) | Yes | NULL |
+| parent_role_id | BIGINT (FK → roles.id, self, **ADR-200**) | Yes | NULL |
 | depth | integer | No | 0 |
 
-**Primary Key**: `id`. **Foreign Keys**: `parent_role_id → roles.id` (`ON DELETE RESTRICT`).
-**Constraints**: unique on `name`. `depth` recomputed server-side on reparenting.
+**Primary Key**: `id` (real PK, **ADR-200**); `public_id` (UUID) is a separate unique, non-primary
+column. **Foreign Keys**: `parent_role_id → roles.id` (`ON DELETE RESTRICT`), referencing `id`, not
+`public_id`. **Constraints**: unique on `name`. `depth` recomputed server-side on reparenting.
 
 ## role_two_factor_requirements
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
-| role_id | uuid (FK → roles.id, PK) | No | — |
+| role_id | BIGINT (FK → roles.id, PK, **ADR-200**) | No | — |
 | required | boolean | No | false |
 
-**Primary Key**: `role_id`. Admin-configurable per role (ADR-075) — replaces the legacy hardcoded
-allowlist. `users.email` becomes required (not-null enforced at the application layer) for any user
-whose Role has `required=true` here, per ADR-075's conditional-required-field rule.
+**Primary Key**: `role_id` — **shared-PK exception (ADR-200)**: no separate `public_id`, since this
+table is never addressed by its own URL/endpoint, only ever read/written as part of the parent
+Role. Admin-configurable per role (ADR-075) — replaces the legacy hardcoded allowlist. `users.email`
+becomes required (not-null enforced at the application layer) for any user whose Role has
+`required=true` here, per ADR-075's conditional-required-field rule.
 
 ## profiles / role_profiles
 
-`profiles`: `id`, `name` (unique), `description`. `role_profiles`: `role_id`, `profile_id`
-composite PK, both FK `ON DELETE CASCADE`. **One consolidated save path for Profile edits reached
-via a Role** — no duplicate Profile-row construction on edit, per ADR-134 (closes the legacy
-`SaveRole.php`/`UpdateProfileChanges.php` orphaned-row defect, SET-RISK-002).
+`profiles`: `id` (BIGINT, real PK, **ADR-200**), `public_id` (UUID, external identity), `name`
+(unique), `description`. `role_profiles`: `role_id`, `profile_id` — both retyped `BIGINT`
+(**ADR-200**), composite PK unchanged (no independent `id`/`public_id`, per the junction-table rule),
+both FK `ON DELETE CASCADE`, referencing `roles.id`/`profiles.id`. **One consolidated save path for
+Profile edits reached via a Role** — no duplicate Profile-row construction on edit, per ADR-134
+(closes the legacy `SaveRole.php`/`UpdateProfileChanges.php` orphaned-row defect, SET-RISK-002).
 
 ## profile_field_permissions / profile_module_action_permissions / profile_module_access
 
-Each: `profile_id` FK `ON DELETE CASCADE`, module/field/action reference, `visible`/`read_only`/
-`permission` boolean — every permission explicitly set on create, no fail-open default (ADR-156,
-closes USR-RISK-013).
+Each: `id` (BIGINT, real PK, **ADR-200**), `public_id` (UUID, external identity), `profile_id`
+(BIGINT FK → `profiles.id`, `ON DELETE CASCADE`), module/field/action reference, `visible`/
+`read_only`/`permission` boolean — every permission explicitly set on create, no fail-open default
+(ADR-156, closes USR-RISK-013).
 
 ## groups / group_memberships
 
-`groups`: `id`, `name` (unique), `description`. `group_memberships`: `id`, `group_id` FK `ON DELETE
-CASCADE`, `member_type` enum(`USER`,`ROLE`,`ROLE_AND_SUBORDINATES`), `member_id` (polymorphic
-reference, application-validated against the type). Assignment/roster use only (ADR-081) — never
-consulted for record-visibility decisions.
+`groups`: `id` (BIGINT, real PK, **ADR-200**), `public_id` (UUID, external identity), `name`
+(unique), `description`. `group_memberships`: `id` (BIGINT, real PK), `public_id` (UUID), `group_id`
+FK → `groups.id` `ON DELETE CASCADE`, `member_type` enum(`USER`,`ROLE`,`ROLE_AND_SUBORDINATES`),
+`member_id` (polymorphic reference — **not** retyped by ADR-200's mechanical FK rule, since it has
+no single target table; application-validated against `member_type` and stores the string form of
+the referenced User/Role's internal `id`, never a raw `public_id`), `user_id` (BIGINT, nullable FK →
+`users.id`). Assignment/roster use only (ADR-081) — never consulted for record-visibility decisions.
 
 ## time_clock_records
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
-| id | uuid | No | `gen_random_uuid()` |
-| user_id | uuid (FK → users.id) | No | — |
+| id | BIGINT | No | `GENERATED ALWAYS AS IDENTITY` (real PK, **ADR-200**) |
+| public_id | UUID | No | `gen_random_uuid()` (external identity, unique not primary, **ADR-200**) |
+| user_id | BIGINT (FK → users.id, **ADR-200**) | No | — |
 | clock_in | timestamptz | No | — |
 | clock_out | timestamptz | **Yes — NULL when open, never a sentinel** | NULL |
 | punch_date | date | No | — |
@@ -295,31 +314,37 @@ consulted for record-visibility decisions.
 | hours_type | enum(`regular`,`holiday`,`personal`,`sick`,`vacation`) | No | `regular` |
 | help_message | text | Yes | NULL |
 
-**Primary Key**: `id`. **Foreign Keys**: `user_id → users.id`. **Indexes**: `(user_id, punch_date)`.
+**Primary Key**: `id` (real PK, **ADR-200**); `public_id` (UUID) is a separate unique, non-primary
+column. **Foreign Keys**: `user_id → users.id`. **Indexes**: `(user_id, punch_date)`.
 `unclosed_needs_resolution` status: a punch still open when its pay period closes surfaces here as
 an explicit, visible exception requiring manager action (ADR-037) — never silently excluded from a
 payroll total.
 
 ## clock_in_task_details
 
-Adds `labor_status` enum(`working`,`break`,`lunch`) — **ADR-077**, not an open question. Remaining
-columns per `5-data-dictionary.md`.
+`id` (BIGINT, real PK, **ADR-200**), `public_id` (UUID, external identity), `time_clock_record_id`
+(BIGINT FK → `time_clock_records.id`), `labor_status` enum(`working`,`break`,`lunch`) — **ADR-077**,
+not an open question. Remaining columns per `5-data-dictionary.md`.
 
 ## personal_days
 
-`user_id` **real FK** (`ON DELETE RESTRICT`) — closes USR-RISK-004's `varchar(2)` corruption;
+`id` (BIGINT, real PK, **ADR-200**), `public_id` (UUID, external identity), `user_id` **real FK**
+(BIGINT → `users.id`, `ON DELETE RESTRICT`) — closes USR-RISK-004's `varchar(2)` corruption;
 remaining columns per `5-data-dictionary.md`.
 
 ## login_history
 
-`username` (text, **not a FK** — legacy matches by string; preserved deliberately, see Known Gaps),
-`login_time`, `logout_time`, `status`, `session_id`, `user_ip`.
+`id` (BIGINT, real PK, **ADR-200**), `public_id` (UUID, external identity), `username` (text,
+**not a FK** — legacy matches by string; preserved deliberately, see Known Gaps), `login_time`,
+`logout_time`, `status`, `session_id`, `user_ip`.
 
 ## quickbooks_sync_pointers
 
-`user_id` FK (`ON DELETE CASCADE`), `qb_list_id`, `qb_edit_sequence` — supports the **revived**
-QuickBooks employee sync (ADR-074), replacing the legacy's 6 orphaned GL-mapping columns with a
-minimal, purpose-built pointer table.
+`user_id` (BIGINT, PK+FK → `users.id`, `ON DELETE CASCADE`) — **shared-PK exception (ADR-200)**: no
+separate `public_id`, never addressed by its own URL/endpoint, only ever read/written as part of the
+parent User's sync status. `qb_list_id`, `qb_edit_sequence` — supports the **revived** QuickBooks
+employee sync (ADR-074), replacing the legacy's 6 orphaned GL-mapping columns with a minimal,
+purpose-built pointer table.
 
 ---
 
@@ -336,10 +361,18 @@ UserNotificationPreference`, `TimeClockRecord → ClockInTaskDetail`, `Role → 
 
 # 6. Constraints
 
-- Primary keys: `uuid`, `gen_random_uuid()` default (ADR-005 convention).
-- Foreign keys: `RESTRICT` on delete for Role/Profile/Group referenced by dependent business rows;
-  `CASCADE` for purely-owned child rows (permission rows, group memberships, HR/preference 1:1
-  children).
+- **Primary Keys**: dual-key on every table — `id` (`BIGINT GENERATED ALWAYS AS IDENTITY`) is the
+  real primary key; `public_id` (UUID, `gen_random_uuid()` default) is a separate unique,
+  non-primary column, the only identity exposed via API/URL/frontend (**ADR-200**, supersedes
+  ADR-005's single-UUID-PK rule). **Shared-PK exception**: `user_hr_profiles`, `user_preferences`,
+  `role_two_factor_requirements`, `quickbooks_sync_pointers`, and `mail_accounts` keep their
+  existing PK-is-the-FK shape (e.g. `user_id BIGINT PRIMARY KEY REFERENCES users(id)`) with no
+  separate `public_id` — none of these five is ever addressed by its own URL/endpoint, only ever
+  read/written as part of the parent User/Role record.
+- **Foreign Keys**: every FK column retyped `BIGINT`, referencing the related table's `id` (never
+  its `public_id`, per **ADR-200**). `RESTRICT` on delete for Role/Profile/Group referenced by
+  dependent business rows; `CASCADE` for purely-owned child rows (permission rows, group
+  memberships, HR/preference 1:1 children).
 - Unique constraints: `users.email`, `users.username`, `roles.name`, `profiles.name`, `groups.name`,
   `(user_notification_preferences.user_id, notification_type)`.
 - Check constraints: none beyond enum-backed columns.
@@ -395,6 +428,7 @@ Data Dictionary (`5-data-dictionary.md`) · Validation (`6-validation.md`) · Bu
 |---|---|
 | 2026-08-18 | Initial draft (v1.0). |
 | 2026-08-18 | v1.1 — review pass caught 7 conflicts with pre-existing, already-locked ADRs the initial draft never checked: removed the Sharing Rule engine entirely (ADR-081), revived QuickBooks instead of excluding it (ADR-074), added the Labor Status enum (ADR-077), locked overtime to flat US 1.5x/40hr (ADR-036), added the unclosed-punch resolution state (ADR-037), cited ADR-154/155/156/157 explicitly instead of independently re-deriving the same fixes, added the Role-edit consolidation note (ADR-134). |
+| 2026-08-19 | ADR-200: dual-key identity retrofit — every table gains `id BIGINT GENERATED ALWAYS AS IDENTITY` as the real primary key; `public_id UUID` stays as a separate unique, non-primary, externally-exposed column; every FK column across every table retyped `BIGINT`, referencing the related table's `id`; `created_by`/`updated_by` retyped `BIGINT` FK → `users.id`. `user_hr_profiles`, `user_preferences`, `role_two_factor_requirements`, `quickbooks_sync_pointers`, `mail_accounts` kept as the shared-PK exception (PK is the FK, no separate `public_id`) since none is independently addressable via its own endpoint. No change to the external API/URL contract (still UUID-only). |
 
 # Approval
 

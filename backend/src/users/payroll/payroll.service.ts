@@ -6,7 +6,7 @@ const OVERTIME_THRESHOLD_HOURS = 40;
 type HoursType = 'regular' | 'holiday' | 'personal' | 'sick' | 'vacation';
 
 export interface PayrollRow {
-  userId: string;
+  userId: string; // `public_id` — the only User identity ever exposed via this report (ADR-200).
   userName: string;
   regular: number;
   holiday: number;
@@ -55,7 +55,7 @@ export class PayrollService {
 
     const users = await this.prisma.user.findMany({
       where: { isDeleted: false },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, publicId: true, firstName: true, lastName: true },
     });
 
     const rows = await Promise.all(users.map((user) => this.buildRow(user, start, end)));
@@ -64,7 +64,7 @@ export class PayrollService {
   }
 
   private async buildRow(
-    user: { id: string; firstName: string; lastName: string | null },
+    user: { id: bigint; publicId: string; firstName: string; lastName: string | null },
     start: Date,
     end: Date,
   ): Promise<PayrollRow> {
@@ -103,7 +103,7 @@ export class PayrollService {
     );
 
     return {
-      userId: user.id,
+      userId: user.publicId,
       userName: [user.firstName, user.lastName].filter(Boolean).join(' '),
       ...hoursByType,
       overtime,

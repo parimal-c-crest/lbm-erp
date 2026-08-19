@@ -49,7 +49,9 @@ async function main() {
 
   // Super Admin is a structurally separate axis from the Role catalog (ADR-057) — no `roleId`,
   // so the JWT's `role` claim is just the fixed label this script's own token represents.
-  const payload: JwtPayload = { sub: superAdmin.id, tenant: 'skeleton', role: 'Super Admin' };
+  // `sub` is the User's `public_id` (ADR-200) — a JWT is client-decodable, so only the external
+  // UUID identity is ever placed in it, matching `AuthService`'s own convention.
+  const payload: JwtPayload = { sub: superAdmin.publicId, tenant: 'skeleton', role: 'Super Admin' };
   const jwtService = new JwtService();
   const token = jwtService.sign(payload, { secret, expiresIn: '30d' });
 

@@ -25,12 +25,22 @@ interface LoginResponseBody {
 describe('Users module — QuickBooks employee sync (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let roleId: string;
-  let adminRoleId: string;
+  // ADR-200 — `Role.id`/`User.id` are internal bigint, only used for this test's own direct Prisma
+  // setup/teardown calls and for `QuickBooksSyncPointer.userId` (the model's own PK, no separate
+  // publicId concept per ADR-200's documented exception list).
+  let roleId: bigint;
+  // Staff role's publicId — the wire shape `POST /users`'s `roleId` field actually expects
+  // (resolved server-side via `resolveRoleId`, `users.service.ts`).
+  let rolePublicId: string;
+  let adminRoleId: bigint;
   let adminAccessToken: string;
   let staffAccessToken: string;
-  let adminUserId: string;
-  let createdUserIds: string[] = [];
+  // Admin user's internal bigint id — used for the `QuickBooksSyncPointer` lookup.
+  let adminUserId: bigint;
+  // Admin user's publicId — the wire shape `QuickBooksSyncJobPayload.userId` actually carries
+  // (queue payloads are JSON-serialized, so ADR-200 keeps them on the external publicId contract).
+  let adminUserPublicId: string;
+  let createdUserIds: bigint[] = [];
 
   const staffUsername = 'e2e-qb-staff';
   const adminUsername = 'e2e-qb-admin';
@@ -49,6 +59,7 @@ describe('Users module — QuickBooks employee sync (e2e)', () => {
     prisma = app.get(PrismaService);
     const role = await prisma.role.create({ data: { name: 'e2e-qb-role', depth: 0 } });
     roleId = role.id;
+    rolePublicId = role.publicId;
     const adminRole = await prisma.role.create({ data: { name: 'Admin', depth: 0 } });
     adminRoleId = adminRole.id;
 
@@ -76,6 +87,7 @@ describe('Users module — QuickBooks employee sync (e2e)', () => {
       },
     });
     adminUserId = adminUser.id;
+    adminUserPublicId = adminUser.publicId;
     createdUserIds = [staffUser.id, adminUser.id];
 
     const staffLogin = await request(app.getHttpServer())
@@ -113,22 +125,23 @@ describe('Users module — QuickBooks employee sync (e2e)', () => {
         username: 'e2e-qb-newhire',
         email: 'e2e-qb-newhire@skeleton.local',
         password: 'CorrectHorse1',
-        roleId,
+        roleId: rolePublicId,
       })
       .expect(201);
-    const newUserId = (response.body as { id: string }).id;
-    createdUserIds.push(newUserId);
+    const newUserPublicId = (response.body as { id: string }).id;
+    const newUser = await prisma.user.findUniqueOrThrow({ where: { publicId: newUserPublicId } });
+    createdUserIds.push(newUser.id);
 
     const jobs = await queue.getJobs(['waiting', 'active', 'completed', 'delayed']);
-    const enqueued = jobs.find((job) => job.data.userId === newUserId);
-    expect(enqueued?.data).toEqual({ userId: newUserId, tenantSubdomain: 'skeleton' });
+    const enqueued = jobs.find((job) => job.data.userId === newUserPublicId);
+    expect(enqueued?.data).toEqual({ userId: newUserPublicId, tenantSubdomain: 'skeleton' });
   });
 
   it('processes a sync job and upserts a synced pointer (FR-013 sync logic)', async () => {
     const processor = app.get(QuickBooksSyncProcessor);
 
     await processor.process({
-      data: { userId: adminUserId, tenantSubdomain: 'skeleton' },
+      data: { userId: adminUserPublicId, tenantSubdomain: 'skeleton' },
     } as never);
 
     const pointer = await prisma.quickBooksSyncPointer.findUnique({

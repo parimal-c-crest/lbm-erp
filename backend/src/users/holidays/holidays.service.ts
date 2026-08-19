@@ -1,8 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { toPublicEntity } from '../../common/utils/public-entity.util';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 
 import type { CreateHolidayDto } from './dto/create-holiday.dto';
+
+function toPublicHoliday<
+  T extends { id: bigint; publicId: string; assignments: { id: bigint; publicId: string }[] },
+>(holiday: T) {
+  return {
+    ...toPublicEntity(holiday),
+    assignments: holiday.assignments.map((a) => toPublicEntity(a)),
+  };
+}
 
 // System-wide holiday catalog + per-user assignment (`8-api.md` §3 GET/POST /holidays,
 // `4-schema.md` §3 "Holiday / HolidayAssignment" — see raid-log R-005 for this task's own
@@ -15,11 +25,12 @@ export class HolidaysService {
     return this.tenantContext.prisma;
   }
 
-  list() {
-    return this.prisma.holiday.findMany({
+  async list() {
+    const holidays = await this.prisma.holiday.findMany({
       orderBy: { date: 'asc' },
       include: { assignments: true },
     });
+    return holidays.map(toPublicHoliday);
   }
 
   async create(dto: CreateHolidayDto) {
@@ -28,14 +39,26 @@ export class HolidaysService {
     });
 
     if (dto.userIds?.length) {
+      // `dto.userIds` are client-supplied `public_id`s — resolved to each User's internal `id`
+      // before writing the FK (ADR-200).
+      const users = await this.prisma.user.findMany({
+        where: { publicId: { in: dto.userIds }, isDeleted: false },
+        select: { id: true, publicId: true },
+      });
+      const foundPublicIds = new Set(users.map((u) => u.publicId));
+      const missing = dto.userIds.filter((id) => !foundPublicIds.has(id));
+      if (missing.length > 0) {
+        throw new NotFoundException(`User(s) not found: ${missing.join(', ')}`);
+      }
       await this.prisma.holidayAssignment.createMany({
-        data: dto.userIds.map((userId) => ({ holidayId: holiday.id, userId })),
+        data: users.map((user) => ({ holidayId: holiday.id, userId: user.id })),
       });
     }
 
-    return this.prisma.holiday.findUnique({
+    const created = await this.prisma.holiday.findUnique({
       where: { id: holiday.id },
       include: { assignments: true },
     });
+    return toPublicHoliday(created!);
   }
 }

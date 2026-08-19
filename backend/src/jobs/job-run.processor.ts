@@ -20,8 +20,19 @@ export class JobRunProcessor extends WorkerHost {
   }
 
   async process(job: Job<CronJobPayload>): Promise<void> {
-    const { jobDefinitionId, tenantSubdomain } = job.data;
+    const { jobDefinitionId: publicJobDefinitionId, tenantSubdomain } = job.data;
     const startedAt = Date.now();
+
+    // ADR-200 — the queue payload carries the JobDefinition's `public_id`; resolve to the
+    // internal `id` (`JobRun.jobDefinitionId`'s real FK type) once, here.
+    const definition = await this.skeleton.jobDefinition.findFirst({
+      where: { publicId: publicJobDefinitionId },
+    });
+    if (!definition) {
+      this.logger.warn(`Job definition ${publicJobDefinitionId} no longer exists — skipping run.`);
+      return;
+    }
+    const jobDefinitionId = definition.id;
 
     const run = await this.skeleton.jobRun.create({
       data: { jobDefinitionId, tenantSubdomain, status: 'running' },

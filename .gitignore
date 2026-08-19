@@ -3,8 +3,6 @@ node_modules/
 .next/
 dist/
 coverage/
-.env
-.env.local
 .env.*.local
 *.log
 .DS_Store
@@ -16,3 +14,4 @@ backend/src/generated/
 /playwright-report/
 /test-results/
 /blob-report/
+config.bat

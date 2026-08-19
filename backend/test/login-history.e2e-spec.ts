@@ -14,8 +14,8 @@ interface LoginResponseBody {
 describe('Users module — login history (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let roleId: string;
-  let adminRoleId: string;
+  let roleId: bigint;
+  let adminRoleId: bigint;
   let adminAccessToken: string;
   let staffAccessToken: string;
 

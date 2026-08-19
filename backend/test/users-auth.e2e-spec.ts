@@ -24,8 +24,8 @@ interface LoginResponseBody {
 describe('Users module — auth (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let roleId: string;
-  let userId: string;
+  let roleId: bigint;
+  let userId: bigint;
   const username = 'e2e-login-user';
   const password = 'CorrectHorse1';
 
@@ -148,8 +148,9 @@ describe('Users module — 2FA (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let auth: AuthService;
-  let roleId: string;
-  let userId: string;
+  let roleId: bigint;
+  let userId: bigint;
+  let userPublicId: string;
   const username = 'e2e-2fa-user';
   const password = 'CorrectHorse1';
 
@@ -181,6 +182,7 @@ describe('Users module — 2FA (e2e)', () => {
       },
     });
     userId = user.id;
+    userPublicId = user.publicId;
   });
 
   afterEach(async () => {
@@ -221,7 +223,7 @@ describe('Users module — 2FA (e2e)', () => {
       .send({ username, password })
       .expect(201);
     const { challengeToken } = login.body as LoginResponseBody;
-    const code = pendingCodeFor(userId);
+    const code = pendingCodeFor(userPublicId);
 
     const verify = await request(app.getHttpServer())
       .post('/auth/2fa/verify')
@@ -237,7 +239,11 @@ describe('Users module — 2FA (e2e)', () => {
     // as a 2FA challenge — exactly the class of bug the security review flagged: verification
     // must be bound to a real, purpose-specific challenge, not just "any signed token".
     const jwt = app.get(JwtService);
-    const normalAccessToken = jwt.sign({ sub: userId, tenant: 'skeleton', role: 'e2e-2fa-role' });
+    const normalAccessToken = jwt.sign({
+      sub: userPublicId,
+      tenant: 'skeleton',
+      role: 'e2e-2fa-role',
+    });
 
     await request(app.getHttpServer())
       .post('/auth/2fa/verify')
@@ -266,7 +272,7 @@ describe('Users module — 2FA (e2e)', () => {
     // TWO_FACTOR_MAX_VERIFY_ATTEMPTS wrong guesses (max-attempts fix, security review finding).
     const realCode = (() => {
       try {
-        return pendingCodeFor(userId);
+        return pendingCodeFor(userPublicId);
       } catch {
         return null;
       }

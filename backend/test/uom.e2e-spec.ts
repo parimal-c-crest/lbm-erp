@@ -16,8 +16,12 @@ interface LoginResponseBody {
 describe('UOM module (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let adminRoleId: string;
-  let staffRoleId: string;
+  // ADR-200 — `Role.id`/`User.id` are internal bigint (Users' own schema was retrofitted the same
+  // session as UOM's); these two are only ever used for this test's own direct Prisma setup/
+  // teardown calls, never sent over the wire, so they stay bigint rather than round-tripping
+  // through a publicId lookup this test doesn't otherwise need.
+  let adminRoleId: bigint;
+  let staffRoleId: bigint;
   let adminToken: string;
   let staffToken: string;
 
@@ -90,20 +94,28 @@ describe('UOM module (e2e)', () => {
     // Group" test creates one that's never pushed onto `groupIds`, and a soft-deleted Group row
     // (isDeleted=true) still physically exists and still holds its `base_type_id` FK, so it must
     // be swept too or the Type deletes below fail with a RESTRICT violation.
+    // ADR-200 — `categoryIds`/`typeIds`/`roleIds`/`groupIds` above were populated from response
+    // bodies' `id` fields, which are now publicId UUIDs (the bigint `id` is internal-only and never
+    // appears in a response). Cleanup queries below match on `publicId`, not the internal `id`.
     const allE2eGroups = await prisma.uOMGroup.findMany({
       where: { name: { startsWith: 'e2e-' } },
+      select: { id: true, publicId: true },
+    });
+    const allGroupPublicIds = [...new Set([...groupIds, ...allE2eGroups.map((g) => g.publicId)])];
+    const allGroupInternalIds = await prisma.uOMGroup.findMany({
+      where: { publicId: { in: allGroupPublicIds } },
       select: { id: true },
     });
-    const allGroupIds = [...new Set([...groupIds, ...allE2eGroups.map((g) => g.id)])];
+    const allGroupIds = allGroupInternalIds.map((g) => g.id);
 
     await prisma.uOMPickingHierarchy.deleteMany({ where: { groupId: { in: allGroupIds } } });
     await prisma.uOMTypeFactorHistory.deleteMany({ where: { groupId: { in: allGroupIds } } });
     await prisma.uOMConversionFactor.deleteMany({ where: { groupId: { in: allGroupIds } } });
     await prisma.uOMRoleAssignment.deleteMany({ where: { groupId: { in: allGroupIds } } });
     await prisma.uOMGroup.deleteMany({ where: { id: { in: allGroupIds } } });
-    await prisma.uOMType.deleteMany({ where: { id: { in: typeIds } } });
-    await prisma.uOMCategory.deleteMany({ where: { id: { in: categoryIds } } });
-    await prisma.uOMFunctionalRole.deleteMany({ where: { id: { in: roleIds } } });
+    await prisma.uOMType.deleteMany({ where: { publicId: { in: typeIds } } });
+    await prisma.uOMCategory.deleteMany({ where: { publicId: { in: categoryIds } } });
+    await prisma.uOMFunctionalRole.deleteMany({ where: { publicId: { in: roleIds } } });
     await prisma.user.deleteMany({ where: { username: { in: [adminUsername, staffUsername] } } });
     await prisma.role.deleteMany({ where: { id: { in: [adminRoleId, staffRoleId] } } });
     await app.close();

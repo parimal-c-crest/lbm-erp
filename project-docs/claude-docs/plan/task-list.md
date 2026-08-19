@@ -2,9 +2,11 @@
 
 Real tasks exist for: **EPIC-001** (Environment Setup), **EPIC-003** (App Shell/Chrome), **EPIC-002**
 (Platform Administration, own design doc), **EPIC-004/EPIC-005** (Users — the first module whose
-`docs-kit/5-modules/users/` JIT set is approved), and now **EPIC-010/EPIC-011** (UOM — the second
-module whose `docs-kit/5-modules/uom/` JIT set is approved, incl. the ADR-190/191/192 amendment
-rounds). Every other module epic (UI Design + Backend/API, 13 remaining modules) carries:
+`docs-kit/5-modules/users/` JIT set is approved), **EPIC-010/EPIC-011** (UOM — the second module
+whose `docs-kit/5-modules/uom/` JIT set is approved, incl. the ADR-190/191/192 amendment rounds), and
+now **EPIC-006/EPIC-007** (Location — the third module whose `docs-kit/5-modules/location/` JIT set is
+approved, incl. the ADR-198 amendment round). Every other module epic (UI Design + Backend/API, 12
+remaining modules) carries:
 
 > **Task list: TBD — awaiting just-in-time module documentation.**
 
@@ -260,6 +262,84 @@ dependency among themselves (`plan/dependencies.md`).
 
 ---
 
+## EPIC-006 — Location — UI Design (Milestone 2)
+
+Source: `docs-kit/5-modules/location/9-ui.md` (5 screens/fragments — Branch List, Add-Location
+Wizard, Branch Detail/Edit, Lost Sale Log Report, Cost Detail tooltip). Mock/static data only — real
+backend wired in EPIC-007. Cross-epic dependency: every task below also depends on **EPIC-003 being
+Done** (needs DataTable/Stepper/Switch/AlertDialog/Tooltip primitives) — not restated per row. Per
+`1-module.md` §3/§10 and `9-ui.md` §1/§2, Product-at-Location data (QoH, bin, cost, reorder/forecast)
+has **no standalone screen of its own** here — it renders entirely inside Products' own product-edit
+screen, so no task below builds it; see the scope-exclusion note after the table.
+
+| ID | Task | Source Reference | Dependencies | Estimate | File/Folder Footprint | Status | Assigned To |
+|----|------|-------------------|---------------|----------|--------------------------|--------|-------------|
+| T-083 | Branch List screen — `DataTable` (Name, Status badge, City/State, Timezone, SO Number Prefix), name search, Status filter (defaults to showing both), Super-Admin-only "Add Location" action, icon-only Open action (ADR-193, no Delete — ADR-197), empty/loading/error states (mock data) | `9-ui.md` §4 Branch List | EPIC-003 Done | M | `frontend/src/app/(dashboard)/settings/locations/page.tsx` | Done | |
+| T-084 | Add-Location Wizard — 3-step `Stepper` (Identity & Requirements required; Clone from Existing optional w/ reference-location `Select` + pricing/tax/print checkboxes; Integration Config optional/deferrable), bordered-card sections per ADR-194, step-1-blocks-Next validation, Save → toast → redirect to Branch Detail (mock data) | `9-ui.md` §4 Add-Location Wizard; FR-001, ADR-055 | T-083 | L | `frontend/src/app/(dashboard)/settings/locations/new/page.tsx`, `frontend/src/components/shared/AddLocationWizard.tsx` | Done | |
+| T-085 | Branch Detail/Edit screen — page header w/ Active/Inactive `Switch` + `AlertDialog` confirmation (Inactive direction only), sectioned/tabbed content (Identity & Numbering, Addresses, Tax, POS & Print, Email, WMS, Store-Transfer Config, masked Integration Credentials, GL Accounting Configuration tab per FR-011), bordered-card sections (ADR-194), no Delete button anywhere (ADR-197), concurrent-edit-lock banner/read-only state (mock data) | `9-ui.md` §4 Branch Detail/Edit | T-083 | L | `frontend/src/app/(dashboard)/settings/locations/[id]/page.tsx` | Done | |
+| T-086 | Lost Sale Log Report routed page — weekly grid (Product, Branch, Lost-Sale Qty/Reason, inline-editable Reorder Level/Alert/Cost/Track-SH/Lost-Sale Factor, icon-only Dismiss per ADR-193), current-week default + read-only week-picker, save-on-blur inline edits, empty/loading/error states (mock data) | `9-ui.md` §4 Lost Sale Log Report | EPIC-003 Done | M | `frontend/src/app/(dashboard)/settings/locations/lost-sales/page.tsx` | Done | |
+| T-087 | Seed realistic mock/demo dataset — Location (7 branches with real building-materials-distributor names/addresses/tax rates/prefixes — e.g. "Riverside Lumber & Supply", "Northgate Building Materials" — mixed Active/Inactive status, a current-week Lost Sale Log dataset with real product/reason rows, one branch given a mocked concurrent-edit-lock state so T-085's locked banner has real data to render against; domain-realistic names, not placeholder strings) | `6-implementation-plan/1-implementation-plan.md` §3 demo-data requirement; `1-module.md` domain | EPIC-003 Done | M | `frontend/src/lib/mock-data/locations.ts` | Done | |
+
+> **Not built in this epic (approved scope exclusions, not omissions)**: a standalone Product-at-
+> Location list/detail/edit screen — that data's UI lives entirely inside Products' own `9-ui.md`
+> (not yet JIT'd), per `1-module.md` §3/§10 and `9-ui.md` §1/§2. The **Cost Detail tooltip** fragment
+> (`9-ui.md` §4) is documented in Location's own `9-ui.md` because the API/data it displays is
+> Location-owned, but it renders inside Products' product-edit page — its frontend build task belongs
+> to Products' own future UI-Design epic (EPIC-008), not this one; not ticketed here to avoid
+> duplicating a component build across two epics. Role-Location Assignment and User-Location Tracking
+> screens are **Not Applicable — owned by the Users module** (already built/out of this module's
+> scope). Location Group has no screen of its own (generic CRM infra, not rebuilt).
+
+---
+
+## EPIC-007 — Location — Backend/API (Milestone 3)
+
+Source: `docs-kit/5-modules/location/4-schema.md`, `8-api.md`, `3-business-rules.md`,
+`7-permissions.md`, `10-implementation-plan.md`. Wires real backend onto the Milestone 2 UI above
+(EPIC-006) — replaces each screen's mock data with real API calls. Cross-epic dependency: every task
+below also depends on **T-005** (Prisma init) — not restated per row beyond the specific screen it
+wires. No cross-module Backend/API dependency blocks Location within M3 — Users, Location, Products,
+UOM have no dependency among themselves (`plan/dependencies.md`), **except** Phase 6's kit-quantity
+propagation (T-092 below), which needs Products' own Kit Component interface — Products has not been
+through its own JIT cycle yet, so T-092 builds and unit-tests Location's side of that contract against
+a stub now, and only fully integration-tests once Products' own Backend/API epic (EPIC-009) lands
+(matches `10-implementation-plan.md`'s own stated Risk).
+
+| ID | Task | Source Reference | Dependencies | Estimate | File/Folder Footprint | Status | Assigned To |
+|----|------|-------------------|---------------|----------|--------------------------|--------|-------------|
+| T-088 | Location schema migration — all 5 entities (`4-schema.md` §4: `locations` incl. encrypted-at-rest credential families R6, `location_accounting_configs` + `location_gl_account_mappings` child table R7/ADR-198 item 6, `products_at_location` incl. its own first-class surrogate `id` R1, every quantity-family `CHECK (... >= 0)` constraint BR-003/BR-025, nullable cost family BR-023, `location_pass_on_field_configs`), case-insensitive unique index on `locations (lower(name))` (ADR-198 item 5) | `4-schema.md` full; `10-implementation-plan.md` Phase 2 | T-005 | L | `prisma/schema.prisma` (Location models) | Available | |
+| T-089 | Product-at-Location core backend — read endpoint w/ lazy-existence sentinel (`{ exists: false }`, ADR-055/BR-022) and null-cost "not yet stocked here" sentinel (BR-023), the **single shared** QoH-write command (`POST .../adjust-qoh`, manual/kit/wms contexts, BR-001–BR-003), non-negative invariant enforced at the application layer first (ADR-038), reason-for-change audit capture, QoH-changed event publication (for WMS), project-wide concurrent-edit lock (ADR-084, reusing T-063's `ConcurrencyLockService`) wired to branch + Product-at-Location edits — wire to T-085's locked-state banner | `8-api.md` `/locations/{id}/products-at-location/{productId}`, `.../adjust-qoh`; FR-004; BR-001, BR-002, BR-003, BR-006, BR-022, BR-023 | T-088, T-085 | L | `backend/src/locations/products-at-location/` | Available | |
+| T-090 | Security hardening — parameterized-queries-only / no dynamic column-name construction across every Location write path (BR-026, closes all six confirmed legacy SQL-injection points), real NestJS `RolesGuard`+`JwtAuthGuard` on every write endpoint per `7-permissions.md` §8's authorization table | `3-business-rules.md` BR-026; `7-permissions.md` §8; `10-implementation-plan.md` Phase 4 | T-088, T-089 | M | `backend/src/locations/**` (guards + query layer, cross-cutting) | Available | |
+| T-091 | Branch CRUD backend — create (Add-Location wizard, Super-Admin-gated, FR-001), edit (FR-002), status toggle w/ BR-021 enforcement (blocks new SO/PO creation + picker exclusion, immediate no-propagation-delay), reference-location snapshot-copy (pricing/tax/print, ADR-055), GL Accounting Configuration read/update (FR-011, R7) — wire to T-083, T-084, T-085 | `8-api.md` `/locations*`, `/locations/{id}/status`, `/locations/{id}/accounting-config`; FR-001, FR-002, FR-003, FR-011 | T-090, T-083, T-084, T-085 | L | `backend/src/locations/locations.controller.ts`, `locations.service.ts`, `backend/src/locations/accounting-config/` | Available | |
+| T-092 | Part-supersession backend — merge service triggered only from reloaded post-save state (BR-004), three-way independent combine options for sales-history/QoH (BR-010), atomic quantity/cost move via the confirmed "true blend" WAC formula (BR-011/ADR-198 item 1), open-order review flagging against SalesOrder/PurchaseOrder (BR-012, non-blocking), kit-quantity-as-computed service (BR-009/R3) against Products' Kit Component interface **stub** (full integration deferred to Products' own JIT cycle, see epic note above) | `8-api.md` `/locations/{id}/products-at-location/{productId}/supersede`; FR-005, FR-006; BR-004, BR-008, BR-009, BR-010, BR-011, BR-012; `10-implementation-plan.md` Phase 6 | T-089, T-090 | L | `backend/src/locations/supersession/` | Available | |
+| T-093 | Demand/lead-time/reorder-point calculation pipeline — Avg Daily Demand w/ nonzero clamp (BR-013), Avg Days Between Sales/Avg & High Qty Sold w/ corrected actual-count divisor (BR-014/ADR-150), Projected Next Use Date fresh formula (BR-015/ADR-198 item 2), Avg Lead Time w/ 14-day no-history fallback (BR-016/ADR-198 item 3), Projected Next Order/Receipt Date preserved exactly as legacy incl. the blackout-only-not-weekend walk (BR-017), fresh Reorder Point/Reorder Quantity formula (BR-018/ADR-196, confirmed Safety Stock method ADR-198 item 4), unconditional recompute on every save w/ freeze-date opt-out (BR-005) — calls UOM's conversion service for any needed conversion (BR-024) | `8-api.md` (recompute runs inside the Product-at-Location save path); FR-007; BR-005, BR-013–BR-018, BR-024; `10-implementation-plan.md` Phase 7 | T-089 | L | `backend/src/locations/reorder-calc/` | Available | |
+| T-094 | Lost-sale/false-loss pipeline + Location Accounting/Pass-On config backend — accumulate-then-promote pipeline w/ once-per-event factor fix (BR-019/ADR-149), false-loss accumulate-then-promote opposite-sign pipeline (BR-020), scheduled BullMQ promotion cron, Lost Sale Log Report grid read + inline-edit + dismiss endpoints, page-view-triggered admin notification email (ADR-151), Location Pass-On Field Configuration CRUD validated against the real `products_at_location` column set (BR-007) — wire to T-086 | `8-api.md` `/locations/{id}/lost-sale-log*`, `/sales-orders/{soId}/lines/{lineId}/record-lost-sale`, `.../flag-disqualified-sale`, `/products/{productId}/pass-on-field-config`; FR-008, FR-009, FR-010, FR-012; BR-007, BR-019, BR-020 | T-089, T-090, T-086 | M | `backend/src/locations/lost-sale-log/`, `backend/src/locations/pass-on-config/` | Available | |
+| T-095 | Cross-module integrations & outputs — supersession domain-event publication (consumed by Forecasting/vendor-line-code/export/autocomplete/B2B-catalog, idempotent-double-delivery safe), WMS's QoH-changed event subscription contract (replaces legacy's direct-table write), Cost Detail tooltip endpoint (field-name validated against the known cost-audit-tracked set, closes the dynamic-column-name injection pattern on this exact endpoint family, BR-026) | `8-api.md` `/locations/{id}/products-at-location/{productId}/cost-detail`; `1-module.md` §11/§12; `10-implementation-plan.md` Phase 9 | T-089, T-092 | M | `backend/src/locations/events/`, `backend/src/locations/cost-detail/` | Available | |
+| T-096 | Seed realistic backend demo/test data — Location (extends T-087's dataset server-side into the real `demo` tenant database: 7 branches, lazily-materialized Product-at-Location rows across a realistic subset of Products' seeded catalog once available, a real current-week Lost Sale Log dataset, one branch's Product-at-Location row given a real part-supersession history — not a second, inconsistent dataset) | `6-implementation-plan/1-implementation-plan.md` §3 demo-data requirement | T-088, T-087 | S | `backend/scripts/seed-location-demo-data.ts` | Available | |
+| T-097 | Full Location module test suite (`11-testing.md` full BR traceability incl. the 6 negative SQL-injection-regression tests, the non-negative-QoH boundary/concurrency tests, the golden-output formula tests for BR-014/BR-017/BR-018) + OpenAPI docs tags for this module's endpoint set | `11-testing.md`; `6-development/9-ci-cd.md` | T-091, T-092, T-093, T-094, T-095 | M | `backend/test/locations*.e2e-spec.ts`, `backend/src/locations/**/*.spec.ts` | Available | |
+
+> **Traceability completeness check (step 4a)**: every entity in `4-schema.md` §3/§4 (5 tables) maps
+> to T-088 (migration) plus its owning service task (T-089 Product-at-Location core, T-091 Branch/
+> Accounting Config, T-092 supersession fields, T-094 Pass-On Config). Every endpoint in `8-api.md`
+> §2's API Summary (19 endpoints) maps to a task: branch CRUD + status + accounting-config (7) →
+> T-091; Product-at-Location read + adjust-qoh (2) → T-089; supersede (1) → T-092; pass-on-field-config
+> read/update (2) → T-094; lost-sale-log read/inline-edit/dismiss + record-lost-sale/flag-disqualified
+> (5) → T-094; cost-detail (1) → T-095; the demand/reorder calculation fields have no dedicated
+> endpoint of their own — they recompute inside T-089's Product-at-Location save path per BR-005, owned
+> by T-093. Every rule in `3-business-rules.md` (BR-001 through BR-026) maps to a task per the Source
+> Reference column above. Every screen/element in `9-ui.md` §2 (5 screens/fragments) maps to its
+> EPIC-006 counterpart, which this epic's tasks wire onto 1:1, **except** the Cost Detail tooltip's
+> own frontend build (its API is T-095, but its UI lives in Products' future EPIC-008, per the
+> EPIC-006 scope-exclusion note) and the standalone Product-at-Location screen (never designed at all,
+> by confirmed scope decision — `1-module.md` §3/§10). **One confirmed cross-module gap, not silently
+> assumed**: `1-module.md` §11 and `10-implementation-plan.md` both flag that Phase 6's kit-propagation
+> (T-092) cannot fully integration-test until Products' own Kit Component interface exists (Products
+> has not been JIT'd yet) — T-092 builds and unit-tests Location's own side of the contract against a
+> stub now, full integration is a confirmed follow-up once Products' Backend/API epic (EPIC-009) lands,
+> tracked as a cross-epic dependency in `dependencies.md`, not silently deferred without a record.
+
+---
+
 # Revision History
 
 | Date | Change |
@@ -280,3 +360,4 @@ dependency among themselves (`plan/dependencies.md`).
 | 2026-08-18 | Added 18 tasks (EPIC-010 T-065–T-072, EPIC-011 T-073–T-082) — UOM's first real task list, derived from its approved `docs-kit/5-modules/uom/` JIT documentation set (incl. the ADR-190/191/192 amendment rounds already folded into the source docs). Traceability check found **no gap**: every schema entity, `8-api.md` endpoint, `3-business-rules.md` BR-###, and `9-ui.md` screen maps to an owning task; the one confirmed-out-of-scope item (legacy's `lbm_applied_uom_pricing` write-back cache / "Manage UOM Qty Pricing" screen, superseded by Pricing's live-resolution design per ADR-029) was cross-checked against `sot-docs/archive/2-module-specs/UOM/` and correctly left unticketed. All 18 tasks start `Available`. |
 | 2026-08-18 | T-063 Done — `backend/src/common/locks/` (`ConcurrencyLockService`, its own plain `ioredis` connection separate from BullMQ's, added `ioredis` as an explicit direct dependency). First implementation of the project-wide standing concurrent-edit lock (ADR-079/080/084): Redis `SET NX PX` to acquire, Lua-script compare-and-extend for heartbeat, Lua-script compare-and-delete for release — atomic, so only the actual holder can renew/release. Applied to `POST /timeclock/override`: new `override/:recordId/lock` (acquire, blocks a second user with "Currently being edited by {name}, locked for you" resolved fresh from the User table, never a stale cached name), `.../lock/heartbeat`, `DELETE .../lock`; the override save itself now requires holding the lock (409 otherwise) and releases it instantly on success, matching ADR-079's "releases the moment the editor leaves edit mode." Domain-agnostic by design — every future module reuses this exact class. TDD'd, 6 new e2e tests, updated 2 pre-existing override tests to acquire the lock first (real behavior change, not a regression). Full suite 16/57 green, typecheck+lint clean. |
 | 2026-08-18 | **T-064 Done — EPIC-005 (Users Backend/API) fully complete, all 19 tasks (T-046–T-064) Done.** Traceability pass against `11-testing.md` §12 Security Tests found 4 named Critical/High tests with zero coverage anywhere in this session's work (grepped every prior spec file first) — added `users-security.e2e-spec.ts` closing the module's own highest-priority worked example (empty/malformed-id delete rejection, BR-001/USR-RISK-001), last-remaining-Admin delete protection, duplicate-username rejection, and an end-to-end SQL-injection-shaped-input test proving Prisma's parameterization holds through the real HTTP path. All 4 passed immediately (real existing guarantees, not new behavior) — a coverage gap closed, not a bug fix. OpenAPI docs: added `@nestjs/swagger` + its compiler plugin (auto-infers DTO schemas from existing `class-validator` decorators, no hand-duplicated `@ApiProperty`), wired `SwaggerModule` at `/api/docs`, tagged all 14 Users-module controllers. Verified live: booted the real server, confirmed all 40 documented endpoints and correct per-controller tag grouping via `/api/docs-json`. Full suite **17 suites / 61 tests, all passing**, typecheck+lint clean. |
+| 2026-08-19 | Added 15 tasks (EPIC-006 T-083–T-087, EPIC-007 T-088–T-097) — Location's first real task list, derived from its approved `docs-kit/5-modules/location/` JIT documentation set (incl. the ADR-198 amendment round), module-scoped re-run of `6-implementation-plan/1-implementation-plan.md` steps 2-6/8. Traceability check found **no gap** in Location's own scope: every schema entity (5 tables), `8-api.md` endpoint (19), `3-business-rules.md` rule (BR-001–BR-026), and `9-ui.md` screen/fragment maps to an owning task. Two confirmed scope items, not silent omissions: the standalone Product-at-Location screen was never designed at all in `9-ui.md` (owned by Products' own future UI, `1-module.md` §3/§10), and the Cost Detail tooltip's frontend build is deferred to Products' own future UI-Design epic (EPIC-008) since it renders inside Products' page, even though its API (T-095) is built here. One confirmed cross-module dependency flagged, not silently deferred: T-092's kit-quantity propagation needs Products' own Kit Component interface (Products not yet JIT'd) — Location's side of the contract is built and unit-tested against a stub now, full integration tracked as a follow-up once Products' Backend/API epic (EPIC-009) lands. All 15 tasks start `Available`. |

@@ -15,8 +15,10 @@ describe('Users module — timeclock auto-close sweep (e2e)', () => {
   let moduleRef: TestingModule;
   let prisma: PrismaService;
   let autoClose: TimeclockAutoCloseService;
-  let roleId: string;
-  let userId: string;
+  // ADR-200 — `Role.id`/`User.id` are internal bigint, only used for this test's own direct Prisma
+  // setup/teardown calls, never sent over the wire (this test makes no HTTP requests at all).
+  let roleId: bigint;
+  let userId: bigint;
 
   beforeEach(async () => {
     moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

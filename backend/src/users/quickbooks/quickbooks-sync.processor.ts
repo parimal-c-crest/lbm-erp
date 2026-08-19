@@ -21,8 +21,14 @@ export class QuickBooksSyncProcessor extends WorkerHost {
   }
 
   async process(job: Job<QuickBooksSyncJobPayload>): Promise<void> {
-    const { userId, tenantSubdomain } = job.data;
+    const { userId: publicUserId, tenantSubdomain } = job.data;
     const prisma = await this.registry.resolve(tenantSubdomain);
+
+    // ADR-200 — the queue payload carries the User's `public_id`; resolve to the internal `id`
+    // (also `QuickBooksSyncPointer`'s own PK) once, here.
+    const user = await prisma.user.findFirst({ where: { publicId: publicUserId } });
+    if (!user) return; // User deleted/unresolvable between enqueue and pickup — nothing to sync.
+    const userId = user.id;
 
     const existing = await prisma.quickBooksSyncPointer.findUnique({ where: { userId } });
     const nextSequence = String(Number(existing?.qbEditSequence ?? '0') + 1);
@@ -32,7 +38,7 @@ export class QuickBooksSyncProcessor extends WorkerHost {
       create: {
         userId,
         status: 'synced',
-        qbListId: `80${userId.slice(0, 4)}-${Date.now()}`,
+        qbListId: `80${publicUserId.slice(0, 4)}-${Date.now()}`,
         qbEditSequence: nextSequence,
         lastSyncedAt: new Date(),
       },
