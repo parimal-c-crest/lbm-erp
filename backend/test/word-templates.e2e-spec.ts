@@ -14,7 +14,7 @@ interface LoginResponseBody {
 describe('Users module — word templates (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let adminRoleId: string;
+  let adminRoleId: bigint;
   let adminAccessToken: string;
   let createdIds: string[] = [];
 
@@ -59,7 +59,7 @@ describe('Users module — word templates (e2e)', () => {
   });
 
   afterEach(async () => {
-    await prisma.wordTemplate.deleteMany({ where: { id: { in: createdIds } } });
+    await prisma.wordTemplate.deleteMany({ where: { publicId: { in: createdIds } } });
     await prisma.user.deleteMany({ where: { username: adminUsername } });
     await prisma.role.deleteMany({ where: { id: adminRoleId } });
     await app.close();
@@ -87,7 +87,7 @@ describe('Users module — word templates (e2e)', () => {
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(200);
-    expect(await prisma.wordTemplate.findUnique({ where: { id } })).toBeNull();
+    expect(await prisma.wordTemplate.findUnique({ where: { publicId: id } })).toBeNull();
     createdIds = [];
   });
 });

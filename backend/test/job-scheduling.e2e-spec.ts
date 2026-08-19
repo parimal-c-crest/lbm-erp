@@ -61,7 +61,9 @@ describe('Job scheduling (e2e)', () => {
     expect(registered?.pattern).toBe('15 2 * * *'); // 2:00 + 15min offset = 2:15
 
     // Simulate a firing without waiting for the real schedule (see class comment above).
-    await queue.add(jobName, { jobDefinitionId: definition.id, tenantSubdomain: 'demo' });
+    // `CronJobPayload.jobDefinitionId` is the wire/queue-payload shape (ADR-200) — the publicId,
+    // not the internal bigint `id`; `JobRunProcessor` resolves it back to `id` on pickup.
+    await queue.add(jobName, { jobDefinitionId: definition.publicId, tenantSubdomain: 'demo' });
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const runs = await skeleton.jobRun.findMany({ where: { jobDefinitionId: definition.id } });

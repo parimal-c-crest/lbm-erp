@@ -29,12 +29,13 @@ enum TenantRuntimeMode {
 }
 
 model TenantRegistry {
-  id          String            @id @default(uuid())
+  id          BigInt            @id @default(autoincrement())
+  publicId    String            @unique @default(uuid()) @map("public_id")
+  createdAt   DateTime          @default(now()) @map("created_at")
   subdomain   String            @unique
   databaseUrl String            @map("database_url")
   type        TenantType
   runtimeMode TenantRuntimeMode @default(live) @map("runtime_mode")
-  createdAt   DateTime          @default(now()) @map("created_at")
 
   jobSchedules JobSchedule[]
 
@@ -48,11 +49,18 @@ model TenantRegistry {
 // module" note; becomes a real FK once Location ships. No `tenant_id` anywhere (ADR-073 —
 // isolation is physical, database-per-tenant, ADR-056).
 model User {
-  id               String     @id @default(uuid())
+  id               BigInt     @id @default(autoincrement())
+  publicId         String     @unique @default(uuid()) @map("public_id")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  createdBy        BigInt?    @map("created_by")
+  updatedBy        BigInt?    @map("updated_by")
+  isDeleted        Boolean    @default(false) @map("is_deleted")
+  deletedAt        DateTime?  @map("deleted_at")
   email            String     @unique
   username         String     @unique
   passwordHash     String     @map("password_hash")
-  roleId           String?    @map("role_id")
+  roleId           BigInt?    @map("role_id")
   isSuperAdmin     Boolean    @default(false) @map("is_super_admin")
   firstName        String     @map("first_name")
   lastName         String?    @map("last_name")
@@ -61,12 +69,6 @@ model User {
   defaultLocation  String?    @map("default_location")
   failedLoginCount Int        @default(0) @map("failed_login_count")
   lockedUntil      DateTime?  @map("locked_until")
-  createdAt        DateTime   @default(now()) @map("created_at")
-  updatedAt        DateTime   @updatedAt @map("updated_at")
-  createdBy        String?    @map("created_by")
-  updatedBy        String?    @map("updated_by")
-  isDeleted        Boolean    @default(false) @map("is_deleted")
-  deletedAt        DateTime?  @map("deleted_at")
 
   role               Role?                        @relation(fields: [roleId], references: [id], onDelete: Restrict)
   hrProfile          UserHrProfile?
@@ -95,7 +97,7 @@ enum UserStatus {
 // 1:1 child, split out of the legacy ~120-column User Header (`4-schema.md` §1). Field set kept
 // deliberately minimal for MVP — expand as later modules need specific HR data, not speculatively.
 model UserHrProfile {
-  userId   String    @id @map("user_id")
+  userId   BigInt    @id @map("user_id")
   salary   Decimal?  @db.Decimal(12, 2)
   hireDate DateTime? @map("hire_date") @db.Date
 
@@ -106,7 +108,7 @@ model UserHrProfile {
 
 // 1:1 child — UI/calendar/print display preferences (`4-schema.md` §3).
 model UserPreference {
-  userId             String @id @map("user_id")
+  userId             BigInt @id @map("user_id")
   defaultLandingPage String @default("dashboard") @map("default_landing_page")
   theme              String @default("light")
 
@@ -116,8 +118,9 @@ model UserPreference {
 }
 
 model UserNotificationPreference {
-  id               String  @id @default(uuid())
-  userId           String  @map("user_id")
+  id               BigInt  @id @default(autoincrement())
+  publicId         String  @unique @default(uuid()) @map("public_id")
+  userId           BigInt  @map("user_id")
   notificationType String  @map("notification_type")
   enabled          Boolean @default(false)
 
@@ -130,10 +133,11 @@ model UserNotificationPreference {
 // Hierarchical (parent/child + depth) — kept from the legacy design per developer decision
 // (`4-schema.md` §1). Seeded with ADR-002's 5 tenant-facing roles as a flat starting layer.
 model Role {
-  id           String  @id @default(uuid())
+  id           BigInt  @id @default(autoincrement())
+  publicId     String  @unique @default(uuid()) @map("public_id")
   name         String  @unique
   description  String?
-  parentRoleId String? @map("parent_role_id")
+  parentRoleId BigInt? @map("parent_role_id")
   depth        Int     @default(0)
 
   parent               Role?                     @relation("RoleHierarchy", fields: [parentRoleId], references: [id], onDelete: Restrict)
@@ -147,7 +151,7 @@ model Role {
 
 // Admin-configurable per role (ADR-075) — replaces the legacy hardcoded allowlist.
 model RoleTwoFactorRequirement {
-  roleId   String  @id @map("role_id")
+  roleId   BigInt  @id @map("role_id")
   required Boolean @default(false)
 
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
@@ -156,7 +160,8 @@ model RoleTwoFactorRequirement {
 }
 
 model Profile {
-  id          String  @id @default(uuid())
+  id          BigInt  @id @default(autoincrement())
+  publicId    String  @unique @default(uuid()) @map("public_id")
   name        String  @unique
   description String?
 
@@ -169,8 +174,8 @@ model Profile {
 // One consolidated save path for Profile edits reached via a Role — no duplicate Profile-row
 // construction on edit (ADR-134, closes the legacy SaveRole.php/UpdateProfileChanges.php defect).
 model RoleProfile {
-  roleId    String @map("role_id")
-  profileId String @map("profile_id")
+  roleId    BigInt @map("role_id")
+  profileId BigInt @map("profile_id")
 
   role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
   profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
@@ -185,8 +190,9 @@ model RoleProfile {
 // simplicity — field-level permissions (`profile_field_permissions`) deferred, no SoT source
 // names concrete field-level rules to enforce yet.
 model ProfileModuleActionPermission {
-  id        String  @id @default(uuid())
-  profileId String  @map("profile_id")
+  id        BigInt  @id @default(autoincrement())
+  publicId  String  @unique @default(uuid()) @map("public_id")
+  profileId BigInt  @map("profile_id")
   module    String
   action    String
   granted   Boolean @default(false)
@@ -198,7 +204,8 @@ model ProfileModuleActionPermission {
 }
 
 model Group {
-  id          String  @id @default(uuid())
+  id          BigInt  @id @default(autoincrement())
+  publicId    String  @unique @default(uuid()) @map("public_id")
   name        String  @unique
   description String?
 
@@ -217,11 +224,16 @@ enum GroupMemberType {
 // `memberId` is polymorphic (User.id or Role.id depending on `memberType`), application-validated
 // against the type rather than two separate FK columns.
 model GroupMembership {
-  id         String          @id @default(uuid())
-  groupId    String          @map("group_id")
+  id         BigInt          @id @default(autoincrement())
+  publicId   String          @unique @default(uuid()) @map("public_id")
+  groupId    BigInt          @map("group_id")
   memberType GroupMemberType @map("member_type")
+  // Polymorphic reference (User.id or Role.id depending on memberType), application-validated —
+  // not a Prisma @relation, so not part of ADR-200's mechanical FK retype. Stored as the string
+  // form of the target's internal bigint `id` (never `public_id`) since this column is never
+  // client-facing on its own — see report note on GroupMembership.memberId.
   memberId   String          @map("member_id")
-  userId     String?         @map("user_id")
+  userId     BigInt?         @map("user_id")
 
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user  User? @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -252,8 +264,9 @@ enum LaborStatus {
 // `clockOut` is NULL when open, never a sentinel timestamp — an unresolved punch surfaces as
 // `unclosed_needs_resolution` (ADR-037), never silently excluded from payroll.
 model TimeClockRecord {
-  id          String          @id @default(uuid())
-  userId      String          @map("user_id")
+  id          BigInt          @id @default(autoincrement())
+  publicId    String          @unique @default(uuid()) @map("public_id")
+  userId      BigInt          @map("user_id")
   clockIn     DateTime        @map("clock_in")
   clockOut    DateTime?       @map("clock_out")
   punchDate   DateTime        @map("punch_date") @db.Date
@@ -270,8 +283,9 @@ model TimeClockRecord {
 
 // "What are you working on" annotation on a clock-in session (ADR-077).
 model ClockInTaskDetail {
-  id                String      @id @default(uuid())
-  timeClockRecordId String      @map("time_clock_record_id")
+  id                BigInt      @id @default(autoincrement())
+  publicId          String      @unique @default(uuid()) @map("public_id")
+  timeClockRecordId BigInt      @map("time_clock_record_id")
   laborStatus       LaborStatus @default(working) @map("labor_status")
   task              String?
 
@@ -281,8 +295,9 @@ model ClockInTaskDetail {
 }
 
 model PersonalDay {
-  id          String    @id @default(uuid())
-  userId      String    @map("user_id")
+  id          BigInt    @id @default(autoincrement())
+  publicId    String    @unique @default(uuid()) @map("public_id")
+  userId      BigInt    @map("user_id")
   hoursType   HoursType @map("hours_type")
   startDate   DateTime  @map("start_date") @db.Date
   endDate     DateTime? @map("end_date") @db.Date
@@ -303,9 +318,10 @@ model PersonalDay {
 // minimal design: a named calendar date, no per-tenant recurrence rule (out of MVP scope, no SoT
 // source names one).
 model Holiday {
-  id   String   @id @default(uuid())
-  name String
-  date DateTime @db.Date
+  id       BigInt   @id @default(autoincrement())
+  publicId String   @unique @default(uuid()) @map("public_id")
+  name     String
+  date     DateTime @db.Date
 
   assignments HolidayAssignment[]
 
@@ -315,9 +331,10 @@ model Holiday {
 
 // Per-user observed-date assignment — which employees actually observe a given catalog holiday.
 model HolidayAssignment {
-  id        String @id @default(uuid())
-  holidayId String @map("holiday_id")
-  userId    String @map("user_id")
+  id        BigInt @id @default(autoincrement())
+  publicId  String @unique @default(uuid()) @map("public_id")
+  holidayId BigInt @map("holiday_id")
+  userId    BigInt @map("user_id")
 
   holiday Holiday @relation(fields: [holidayId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -329,7 +346,8 @@ model HolidayAssignment {
 // `username` is text, not a FK — legacy matches by string, preserved deliberately (Known Gaps,
 // `4-schema.md` §4).
 model LoginHistory {
-  id         String    @id @default(uuid())
+  id         BigInt    @id @default(autoincrement())
+  publicId   String    @unique @default(uuid()) @map("public_id")
   username   String
   loginTime  DateTime  @default(now()) @map("login_time")
   logoutTime DateTime? @map("logout_time")
@@ -344,7 +362,7 @@ model LoginHistory {
 // Revived QuickBooks employee sync (ADR-074) — minimal purpose-built pointer table, replaces the
 // legacy's 6 orphaned GL-mapping columns.
 model QuickBooksSyncPointer {
-  userId         String    @id @map("user_id")
+  userId         BigInt    @id @map("user_id")
   qbListId       String?   @map("qb_list_id")
   qbEditSequence String?   @map("qb_edit_sequence")
   status         String    @default("pending")
@@ -358,7 +376,7 @@ model QuickBooksSyncPointer {
 
 // Self-contained personal-productivity feature, carried forward as-is (`4-schema.md` §1).
 model MailAccount {
-  userId       String  @id @map("user_id")
+  userId       BigInt  @id @map("user_id")
   displayName  String  @map("display_name")
   replyToEmail String  @map("reply_to_email")
   signature    String?
@@ -371,7 +389,8 @@ model MailAccount {
 // Standalone, no FK to User (`4-schema.md` §2) — minimal backend-only shape per ADR-188
 // (backend/API-only, no dedicated UI in this MVP).
 model NotificationScheduler {
-  id             String  @id @default(uuid())
+  id             BigInt  @id @default(autoincrement())
+  publicId       String  @unique @default(uuid()) @map("public_id")
   name           String
   cronExpression String  @map("cron_expression")
   enabled        Boolean @default(true)
@@ -380,9 +399,10 @@ model NotificationScheduler {
 }
 
 model WordTemplate {
-  id      String @id @default(uuid())
-  name    String
-  content String
+  id       BigInt @id @default(autoincrement())
+  publicId String @unique @default(uuid()) @map("public_id")
+  name     String
+  content  String
 
   @@map("word_templates")
 }
@@ -402,12 +422,13 @@ enum JobRunStatus {
 // ("tenant A's nightly job runs at 1:00am, tenant B's at 1:15am") without needing to parse/mutate
 // arbitrary cron expressions to apply a per-tenant offset (§ JobSchedule below).
 model JobDefinition {
-  id            String   @id @default(uuid())
+  id            BigInt   @id @default(autoincrement())
+  publicId      String   @unique @default(uuid()) @map("public_id")
+  createdAt     DateTime @default(now()) @map("created_at")
   name          String   @unique
   baseHour      Int      @map("base_hour")
   baseMinute    Int      @map("base_minute")
   masterEnabled Boolean  @default(true) @map("master_enabled")
-  createdAt     DateTime @default(now()) @map("created_at")
 
   schedules JobSchedule[]
   runs      JobRun[]
@@ -420,13 +441,14 @@ model JobDefinition {
 // Location exists (M3) this reads that tenant's primary Location's Timezone field instead
 // (ADR-059) — not available yet, so not wired to a real field here.
 model JobSchedule {
-  id                String   @id @default(uuid())
-  jobDefinitionId   String   @map("job_definition_id")
+  id                BigInt   @id @default(autoincrement())
+  publicId          String   @unique @default(uuid()) @map("public_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  jobDefinitionId   BigInt   @map("job_definition_id")
   tenantSubdomain   String   @map("tenant_subdomain")
   enabled           Boolean  @default(true)
   offsetMinutes     Int      @default(0) @map("offset_minutes")
   timezoneReference String   @default("UTC") @map("timezone_reference")
-  createdAt         DateTime @default(now()) @map("created_at")
 
   jobDefinition JobDefinition  @relation(fields: [jobDefinitionId], references: [id])
   tenant        TenantRegistry @relation(fields: [tenantSubdomain], references: [subdomain])
@@ -442,15 +464,16 @@ model JobSchedule {
 // is a functional index added via raw SQL in the migration (Prisma has no native functional-index
 // support) — see the migration's own comment.
 model UOMCategory {
-  id        String    @id @default(uuid())
-  name      String
-  sortOrder Int?      @map("sort_order")
-  isDeleted Boolean   @default(false) @map("is_deleted")
-  deletedAt DateTime? @map("deleted_at")
+  id        BigInt    @id @default(autoincrement())
+  publicId  String    @unique @default(uuid()) @map("public_id")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
-  createdBy String?   @map("created_by")
-  updatedBy String?   @map("updated_by")
+  createdBy BigInt?   @map("created_by")
+  updatedBy BigInt?   @map("updated_by")
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  name      String
+  sortOrder Int?      @map("sort_order")
 
   types  UOMType[]
   groups UOMGroup[]
@@ -459,16 +482,17 @@ model UOMCategory {
 }
 
 model UOMType {
-  id         String    @id @default(uuid())
-  name       String
-  categoryId String?   @map("category_id")
-  sortOrder  Int?      @map("sort_order")
-  isDeleted  Boolean   @default(false) @map("is_deleted")
-  deletedAt  DateTime? @map("deleted_at")
+  id         BigInt    @id @default(autoincrement())
+  publicId   String    @unique @default(uuid()) @map("public_id")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
-  createdBy  String?   @map("created_by")
-  updatedBy  String?   @map("updated_by")
+  createdBy  BigInt?   @map("created_by")
+  updatedBy  BigInt?   @map("updated_by")
+  isDeleted  Boolean   @default(false) @map("is_deleted")
+  deletedAt  DateTime? @map("deleted_at")
+  name       String
+  categoryId BigInt?   @map("category_id")
+  sortOrder  Int?      @map("sort_order")
 
   category UOMCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
@@ -482,15 +506,16 @@ model UOMType {
 }
 
 model UOMFunctionalRole {
-  id        String    @id @default(uuid())
-  name      String
-  sortOrder Int?      @map("sort_order")
-  isDeleted Boolean   @default(false) @map("is_deleted")
-  deletedAt DateTime? @map("deleted_at")
+  id        BigInt    @id @default(autoincrement())
+  publicId  String    @unique @default(uuid()) @map("public_id")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
-  createdBy String?   @map("created_by")
-  updatedBy String?   @map("updated_by")
+  createdBy BigInt?   @map("created_by")
+  updatedBy BigInt?   @map("updated_by")
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  name      String
+  sortOrder Int?      @map("sort_order")
 
   roleAssignments UOMRoleAssignment[]
 
@@ -502,16 +527,17 @@ model UOMFunctionalRole {
 // express a functional/expression index). "Uses Picking Hierarchy" is deliberately NOT a column
 // here (ADR-192/BR-013) — computed at read time from `pickingHierarchy` row existence.
 model UOMGroup {
-  id         String    @id @default(uuid())
-  name       String
-  categoryId String?   @map("category_id")
-  baseTypeId String    @map("base_type_id")
-  isDeleted  Boolean   @default(false) @map("is_deleted")
-  deletedAt  DateTime? @map("deleted_at")
+  id         BigInt    @id @default(autoincrement())
+  publicId   String    @unique @default(uuid()) @map("public_id")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
-  createdBy  String?   @map("created_by")
-  updatedBy  String?   @map("updated_by")
+  createdBy  BigInt?   @map("created_by")
+  updatedBy  BigInt?   @map("updated_by")
+  isDeleted  Boolean   @default(false) @map("is_deleted")
+  deletedAt  DateTime? @map("deleted_at")
+  name       String
+  categoryId BigInt?   @map("category_id")
+  baseTypeId BigInt    @map("base_type_id")
 
   category UOMCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   baseType UOMType      @relation(fields: [baseTypeId], references: [id], onDelete: Restrict)
@@ -525,14 +551,15 @@ model UOMGroup {
 }
 
 model UOMRoleAssignment {
-  id        String   @id @default(uuid())
-  groupId   String   @map("group_id")
-  roleId    String   @map("role_id")
-  typeId    String   @map("type_id")
+  id        BigInt   @id @default(autoincrement())
+  publicId  String   @unique @default(uuid()) @map("public_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-  createdBy String?  @map("created_by")
-  updatedBy String?  @map("updated_by")
+  createdBy BigInt?  @map("created_by")
+  updatedBy BigInt?  @map("updated_by")
+  groupId   BigInt   @map("group_id")
+  roleId    BigInt   @map("role_id")
+  typeId    BigInt   @map("type_id")
 
   group UOMGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
   role  UOMFunctionalRole @relation(fields: [roleId], references: [id], onDelete: Restrict)
@@ -545,14 +572,15 @@ model UOMRoleAssignment {
 // `unitsPerBase` CHECK (> 0, whole number) added via raw SQL in the migration (BR-003/BR-004) —
 // Prisma has no native CHECK-constraint syntax at this project's Prisma version.
 model UOMConversionFactor {
-  id            String   @id @default(uuid())
-  groupId       String   @map("group_id")
-  typeId        String   @map("type_id")
-  unitsPerBase  Decimal  @map("units_per_base") @db.Decimal(18, 4)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  createdBy     String?  @map("created_by")
-  updatedBy     String?  @map("updated_by")
+  id           BigInt   @id @default(autoincrement())
+  publicId     String   @unique @default(uuid()) @map("public_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdBy    BigInt?  @map("created_by")
+  updatedBy    BigInt?  @map("updated_by")
+  groupId      BigInt   @map("group_id")
+  typeId       BigInt   @map("type_id")
+  unitsPerBase Decimal  @map("units_per_base") @db.Decimal(18, 4)
 
   group UOMGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   type  UOMType  @relation(fields: [typeId], references: [id], onDelete: Restrict)
@@ -565,13 +593,14 @@ model UOMConversionFactor {
 // WHERE effectiveTo IS NULL added via raw SQL in the migration (at most one "currently effective"
 // row per pair).
 model UOMTypeFactorHistory {
-  id            String    @id @default(uuid())
-  groupId       String    @map("group_id")
-  typeId        String    @map("type_id")
+  id            BigInt    @id @default(autoincrement())
+  publicId      String    @unique @default(uuid()) @map("public_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  groupId       BigInt    @map("group_id")
+  typeId        BigInt    @map("type_id")
   rate          Decimal   @db.Decimal(18, 4)
   effectiveFrom DateTime  @map("effective_from") @db.Date
   effectiveTo   DateTime? @map("effective_to") @db.Date
-  createdAt     DateTime  @default(now()) @map("created_at")
 
   group UOMGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   type  UOMType  @relation(fields: [typeId], references: [id], onDelete: Restrict)
@@ -581,16 +610,17 @@ model UOMTypeFactorHistory {
 }
 
 model UOMPickingHierarchy {
-  id        String    @id @default(uuid())
-  groupId   String    @map("group_id")
-  typeId    String    @map("type_id")
-  sortOrder Int       @map("sort_order")
-  isDeleted Boolean   @default(false) @map("is_deleted")
-  deletedAt DateTime? @map("deleted_at")
+  id        BigInt    @id @default(autoincrement())
+  publicId  String    @unique @default(uuid()) @map("public_id")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
-  createdBy String?   @map("created_by")
-  updatedBy String?   @map("updated_by")
+  createdBy BigInt?   @map("created_by")
+  updatedBy BigInt?   @map("updated_by")
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  groupId   BigInt    @map("group_id")
+  typeId    BigInt    @map("type_id")
+  sortOrder Int       @map("sort_order")
 
   group UOMGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   type  UOMType  @relation(fields: [typeId], references: [id], onDelete: Restrict)
@@ -601,8 +631,9 @@ model UOMPickingHierarchy {
 }
 
 model JobRun {
-  id              String       @id @default(uuid())
-  jobDefinitionId String       @map("job_definition_id")
+  id              BigInt       @id @default(autoincrement())
+  publicId        String       @unique @default(uuid()) @map("public_id")
+  jobDefinitionId BigInt       @map("job_definition_id")
   tenantSubdomain String       @map("tenant_subdomain")
   status          JobRunStatus @default(running)
   startedAt       DateTime     @default(now()) @map("started_at")

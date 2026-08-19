@@ -18,10 +18,14 @@ interface LoginResponseBody {
 describe('Users module — notification schedulers (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let adminRoleId: string;
-  let staffRoleId: string;
+  // ADR-200 — `Role.id` is internal bigint, only used for this test's own direct Prisma setup/
+  // teardown calls, never sent over the wire.
+  let adminRoleId: bigint;
+  let staffRoleId: bigint;
   let adminAccessToken: string;
   let staffAccessToken: string;
+  // `NotificationScheduler` publicIds (UUIDs) returned from HTTP responses — cleanup below matches
+  // on `publicId`, not the internal bigint `id`.
   let createdIds: string[] = [];
 
   const adminUsername = 'e2e-notifsched-admin';
@@ -88,7 +92,7 @@ describe('Users module — notification schedulers (e2e)', () => {
   });
 
   afterEach(async () => {
-    await prisma.notificationScheduler.deleteMany({ where: { id: { in: createdIds } } });
+    await prisma.notificationScheduler.deleteMany({ where: { publicId: { in: createdIds } } });
     await prisma.user.deleteMany({ where: { username: { in: [adminUsername, staffUsername] } } });
     await prisma.role.deleteMany({ where: { id: { in: [adminRoleId, staffRoleId] } } });
     await app.close();
@@ -117,7 +121,7 @@ describe('Users module — notification schedulers (e2e)', () => {
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .send({ enabled: false })
       .expect(200);
-    const disabled = await prisma.notificationScheduler.findUnique({ where: { id } });
+    const disabled = await prisma.notificationScheduler.findUnique({ where: { publicId: id } });
     expect(disabled?.enabled).toBe(false);
 
     await request(app.getHttpServer())
@@ -125,7 +129,7 @@ describe('Users module — notification schedulers (e2e)', () => {
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(200);
-    expect(await prisma.notificationScheduler.findUnique({ where: { id } })).toBeNull();
+    expect(await prisma.notificationScheduler.findUnique({ where: { publicId: id } })).toBeNull();
     createdIds = [];
   });
 

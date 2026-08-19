@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { toPublicEntity } from '../../common/utils/public-entity.util';
 import { EntityIdentifier } from '../../common/value-objects/entity-identifier';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 
@@ -16,26 +17,33 @@ export class WordTemplatesService {
     return this.tenantContext.prisma;
   }
 
-  list() {
-    return this.prisma.wordTemplate.findMany({ orderBy: { name: 'asc' } });
+  async list() {
+    const templates = await this.prisma.wordTemplate.findMany({ orderBy: { name: 'asc' } });
+    return templates.map(toPublicEntity);
   }
 
-  create(dto: CreateWordTemplateDto) {
-    return this.prisma.wordTemplate.create({ data: dto });
+  async create(dto: CreateWordTemplateDto) {
+    return toPublicEntity(await this.prisma.wordTemplate.create({ data: dto }));
   }
 
   async update(id: string, dto: UpdateWordTemplateDto) {
     const identifier = EntityIdentifier.from(id);
-    const existing = await this.prisma.wordTemplate.findUnique({ where: { id: identifier.value } });
+    const existing = await this.prisma.wordTemplate.findFirst({
+      where: { publicId: identifier.value },
+    });
     if (!existing) throw new NotFoundException('Word template not found.');
-    return this.prisma.wordTemplate.update({ where: { id: identifier.value }, data: dto });
+    return toPublicEntity(
+      await this.prisma.wordTemplate.update({ where: { id: existing.id }, data: dto }),
+    );
   }
 
   async remove(id: string) {
     const identifier = EntityIdentifier.from(id);
-    const existing = await this.prisma.wordTemplate.findUnique({ where: { id: identifier.value } });
+    const existing = await this.prisma.wordTemplate.findFirst({
+      where: { publicId: identifier.value },
+    });
     if (!existing) throw new NotFoundException('Word template not found.');
-    await this.prisma.wordTemplate.delete({ where: { id: identifier.value } });
+    await this.prisma.wordTemplate.delete({ where: { id: existing.id } });
     return { deleted: true };
   }
 }

@@ -2,7 +2,7 @@ import { Body, Controller, Post, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
-import type { JwtPayload } from '../../auth/jwt.strategy';
+import type { AuthenticatedUser } from '../../auth/jwt.strategy';
 
 import { SubmitPersonalDayDto } from './dto/submit-personal-day.dto';
 import { PersonalDaysService } from './personal-days.service';
@@ -14,7 +14,7 @@ export class PersonalDaysController {
   constructor(private readonly personalDays: PersonalDaysService) {}
 
   @Post()
-  submit(@Body() dto: SubmitPersonalDayDto, @Req() req: Request & { user?: JwtPayload }) {
-    return this.personalDays.submit(req.user!.sub, dto);
+  submit(@Body() dto: SubmitPersonalDayDto, @Req() req: Request & { user?: AuthenticatedUser }) {
+    return this.personalDays.submit(req.user!.internalId, dto);
   }
 }

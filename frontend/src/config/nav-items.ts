@@ -29,7 +29,6 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Products', href: '/products', icon: Package },
   { label: 'Purchase Orders', href: '/purchase-orders', icon: ShoppingCart },
   { label: 'Vendors', href: '/vendors', icon: Warehouse },
-  { label: 'Location', href: '/locations', icon: MapPin },
   { label: 'Pricing', href: '/pricing', icon: Tag },
   {
     label: 'Users',
@@ -49,6 +48,9 @@ export const NAV_ITEMS: NavItem[] = [
       // System Configuration > Unit of Measure (`docs-kit/5-modules/uom/9-ui.md` §3 — Settings →
       // System Configuration → Unit of Measure, per `1-module.md` §10's flagged Assumption).
       { label: 'Unit of Measure', href: '/settings/uom', icon: Settings },
+      // Settings > Location — ADR-195. Location's day-to-day surface is the Super-Admin-only
+      // Add-Location wizard (ADR-055), not a module staff browse daily — same shape as UOM.
+      { label: 'Location', href: '/settings/locations', icon: MapPin },
     ],
   },
 ];

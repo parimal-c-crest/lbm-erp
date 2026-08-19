@@ -13,6 +13,9 @@ import type { ResolveConversionDto } from './dto/resolve-conversion.dto';
 // side being multiplied up to, not divided down to). `3-business-rules.md` BR-003/004 itself flags
 // the exact enforcement-direction wording as Underspecified — this is this task's own resolved
 // implementation choice, not a silent guess.
+//
+// ADR-200 — `groupId`/`typeId` on the wire are publicId UUIDs; resolved to internal bigint `id`s
+// once up front, then every downstream query/comparison uses the resolved bigint.
 @Injectable()
 export class ConversionService {
   constructor(private readonly tenantContext: TenantContextService) {}
@@ -22,15 +25,21 @@ export class ConversionService {
   }
 
   async resolve(dto: ResolveConversionDto): Promise<{ result: number }> {
-    const groupId = EntityIdentifier.from(dto.groupId).value;
-    const typeId = EntityIdentifier.from(dto.typeId).value;
+    const groupPublicId = EntityIdentifier.from(dto.groupId).value;
+    const typePublicId = EntityIdentifier.from(dto.typeId).value;
 
     const group = await this.prisma.uOMGroup.findFirst({
-      where: { id: groupId, isDeleted: false },
+      where: { publicId: groupPublicId, isDeleted: false },
     });
     if (!group) throw new NotFoundException('Group not found.');
 
-    const rate = await this.resolveRate(groupId, typeId, group.baseTypeId, dto.asOfDate);
+    const type = await this.prisma.uOMType.findFirst({
+      where: { publicId: typePublicId, isDeleted: false },
+      select: { id: true },
+    });
+    if (!type) throw new NotFoundException('Type not found.');
+
+    const rate = await this.resolveRate(group.id, type.id, group.baseTypeId, dto.asOfDate);
 
     // BR-007 — always fractional, never whole-number-rounded, no config flag either direction.
     const result = dto.direction === 'uom_to_base' ? dto.value * rate : dto.value / rate;
@@ -39,9 +48,9 @@ export class ConversionService {
   }
 
   private async resolveRate(
-    groupId: string,
-    typeId: string,
-    baseTypeId: string,
+    groupId: bigint,
+    typeId: bigint,
+    baseTypeId: bigint,
     asOfDate?: string,
   ): Promise<number> {
     if (typeId === baseTypeId) return 1; // BR-003 — Base Type's own factor is implicitly 1.

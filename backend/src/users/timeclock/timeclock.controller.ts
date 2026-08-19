@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Param, Post, Req, UseGuards } from '@nestjs/c
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
-import type { JwtPayload } from '../../auth/jwt.strategy';
+import type { AuthenticatedUser } from '../../auth/jwt.strategy';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
@@ -20,20 +20,20 @@ export class TimeclockController {
   constructor(private readonly timeclock: TimeclockService) {}
 
   @Post('clock-in')
-  clockIn(@Body() dto: ClockInDto, @Req() req: Request & { user?: JwtPayload }) {
-    return this.timeclock.clockIn(req.user!.sub, dto);
+  clockIn(@Body() dto: ClockInDto, @Req() req: Request & { user?: AuthenticatedUser }) {
+    return this.timeclock.clockIn(req.user!.internalId, dto);
   }
 
   @Post('clock-out')
-  clockOut(@Req() req: Request & { user?: JwtPayload }) {
-    return this.timeclock.clockOut(req.user!.sub);
+  clockOut(@Req() req: Request & { user?: AuthenticatedUser }) {
+    return this.timeclock.clockOut(req.user!.internalId);
   }
 
   @Post('override/:recordId/lock')
   @UseGuards(RolesGuard)
   @Roles('Admin', 'Accounting/Management')
-  lockOverride(@Param('recordId') recordId: string, @Req() req: Request & { user?: JwtPayload }) {
-    return this.timeclock.lockOverride(recordId, req.user!.sub);
+  lockOverride(@Param('recordId') recordId: string, @Req() req: Request & { user?: AuthenticatedUser }) {
+    return this.timeclock.lockOverride(recordId, req.user!.internalId);
   }
 
   @Post('override/:recordId/lock/heartbeat')
@@ -41,9 +41,9 @@ export class TimeclockController {
   @Roles('Admin', 'Accounting/Management')
   heartbeatOverrideLock(
     @Param('recordId') recordId: string,
-    @Req() req: Request & { user?: JwtPayload },
+    @Req() req: Request & { user?: AuthenticatedUser },
   ) {
-    return this.timeclock.heartbeatOverrideLock(recordId, req.user!.sub);
+    return this.timeclock.heartbeatOverrideLock(recordId, req.user!.internalId);
   }
 
   @Delete('override/:recordId/lock')
@@ -51,15 +51,15 @@ export class TimeclockController {
   @Roles('Admin', 'Accounting/Management')
   releaseOverrideLock(
     @Param('recordId') recordId: string,
-    @Req() req: Request & { user?: JwtPayload },
+    @Req() req: Request & { user?: AuthenticatedUser },
   ) {
-    return this.timeclock.releaseOverrideLock(recordId, req.user!.sub);
+    return this.timeclock.releaseOverrideLock(recordId, req.user!.internalId);
   }
 
   @Post('override')
   @UseGuards(RolesGuard)
   @Roles('Admin', 'Accounting/Management')
-  override(@Body() dto: OverrideTimeClockDto, @Req() req: Request & { user?: JwtPayload }) {
-    return this.timeclock.override(dto, req.user!.sub);
+  override(@Body() dto: OverrideTimeClockDto, @Req() req: Request & { user?: AuthenticatedUser }) {
+    return this.timeclock.override(dto, req.user!.internalId);
   }
 }

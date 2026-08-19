@@ -16,11 +16,11 @@
 | Project Name | LBM ERP Rewrite |
 | Testing Approach | Automated-first (Jest + Playwright), rule-ID-traceable, per-module [Source: ADR-015, ADR-027] |
 | Development Methodology | Solo developer + AI-assisted, JIT per module (`6-development/5-implementation-workflow.md`) |
-| Version | 1.0 (late wave — first run, folding in Users and UOM) |
+| Version | 1.1 (late wave — second run, folding in Location alongside Users and UOM) |
 | Status | Draft |
 | Author | Claude Code (docs-kit generation) |
 | Created Date | 2026-08-18 |
-| Last Updated | 2026-08-18 |
+| Last Updated | 2026-08-19 |
 
 ---
 
@@ -28,11 +28,20 @@
 
 Testing in this project is **rule-ID-traceable by construction**: every module's own
 `11-testing.md` maps each test case back to a Functional Requirement, a Business Rule ID
-(`<MODULE>-RULE-###`/`BR-###`), a Validation Rule ID (`VR-###`), and a permission — both Users (66
-business rules, 23 test cases shown, full catalog referenced) and UOM (21 business rules, 36+ test
-cases, all individually enumerated) already demonstrate this pattern in full. This document
+(`<MODULE>-RULE-###`/`BR-###`), a Validation Rule ID (`VR-###`), and a permission — Users (66
+business rules, 23 test cases shown, full catalog referenced), UOM (21 business rules, 36+ test
+cases, all individually enumerated), and now **Location** (26 business rules, BR-001 through BR-026,
+28 test cases individually enumerated) already demonstrate this pattern in full. This document
 generalizes that pattern as the project-wide standard, rather than introducing a separate abstract
 testing framework the actual modules don't follow.
+
+- **Location's own testing document is the first to be explicitly grounded in a dedicated
+  build-guidance source** (`sot-docs/raw/2-module-specs/Location/build-guidance.md`
+  §Test/Verification Strategy Pointer), which names rule-ID-traceable tests, golden-output tests for
+  the calculation pipeline, boundary-inclusive invariant tests, concurrency tests, and
+  migration/data-integrity audit scripts as its own recommended approach — Location's
+  `11-testing.md` follows that source directly rather than this project's generic testing-strategy
+  template alone (§8, §10, §14 below cite the concrete instances).
 
 - **Quality objectives**: zero untested Critical/High security finding (both modules' §12 Security
   Tests sections name a specific test per finding, not a general assurance); 100% business-rule
@@ -67,9 +76,13 @@ The testing strategy should:
   added alongside BR-020's new locking rule specifically so the lock's introduction couldn't be
   mistaken for blocking the still-valid case too).
 - Improve software reliability — golden-output tests for anything with a canonical formula (UOM's
-  conversion arithmetic, TC-015; Users' payroll overtime formula, ADR-036) so a future
-  re-implementation can't silently drift, closing the exact defect class (a second, divergent SQL
-  reimplementation of UOM's conversion formula) the legacy extraction found.
+  conversion arithmetic, TC-015; Users' payroll overtime formula, ADR-036; **Location's own demand/
+  reorder-point calculation pipeline** — Avg Daily Demand TC-017, the corrected actual-transaction-
+  count divisor TC-018/ADR-150, Projected Next Order/Receipt Date's deliberately-preserved
+  "skips blackout days, not weekends" behavior TC-020, and the fresh Reorder Point/Reorder Quantity
+  formula TC-021/ADR-196) so a future re-implementation can't silently drift, closing the exact
+  defect class (a second, divergent SQL reimplementation of UOM's conversion formula) the legacy
+  extraction found.
 - Support continuous delivery — CI-blocking test gates (`6-development/9-ci-cd.md` §11), unaffected
   by this document.
 - Reduce production defects — security regression tests reproduce documented legacy injection
@@ -94,7 +107,12 @@ The testing strategy should:
   database, per `6-development/1-development-environment.md` §11/§16.
 - Independent verification where appropriate — cross-module chain tests (§7) independently confirm a
   consuming module can actually use what a producing module claims to expose, not just that each
-  module's own isolated tests pass.
+  module's own isolated tests pass. **Location's own two named cross-module chain tests** are the
+  concrete third instance of this principle: TC-008 (a kit product's QoH adjustment must actually
+  propagate to the real component products' own rows in Products' own table, not a stub, closing
+  ADR-148's kit-propagation finding) and TC-016 (part supersession must actually flag the real open
+  SalesOrder/PurchaseOrder lines referencing the superseded product, via those modules' own live
+  query, not a direct database check, closing ADR-147's open-order-flagging finding).
 
 ---
 
@@ -129,8 +147,13 @@ Release Approval (6-development/9-ci-cd.md §15)
 Purpose: verify individual functions, classes, and components — Jest (ADR-015).
 
 Focus: business logic (one test per `<MODULE>-RULE-###`/`BR-###`, §9 below), validation (one test
-per `VR-###`), error handling, edge cases. Both modules' `11-testing.md` §9 tables are the concrete
-instance of this — e.g. UOM's BR-001 through BR-021, each mapped to one or more named test cases.
+per `VR-###`), error handling, edge cases. All three modules' `11-testing.md` §9 tables are the
+concrete instance of this — e.g. UOM's BR-001 through BR-021, and Location's BR-001 through BR-026,
+each mapped to one or more named test cases. Location's own TC-007 is this project's clearest
+**boundary-inclusive invariant test** to date: a row at quantity 1 is adjusted to exactly 0 (must
+succeed), then the resulting 0 row is adjusted by one unit further (must be rejected) — asserting
+both sides of the non-negative floor explicitly, not just the clearly-negative case, per
+`build-guidance.md`'s own recommended "boundary-inclusive" test style.
 
 ---
 
@@ -145,8 +168,8 @@ Examples
 - API ↔ External Services — Users' QuickBooks sync integration test ("integration test confirming a
   User save enqueues and completes a QuickBooks sync," `10-implementation-plan.md` Phase 9 Verify).
 - Frontend ↔ Backend — a module's `11-testing.md` §8 (UI Tests).
-- **Cross-module** — the specific, separately-tracked category both modules name explicitly (§2 of
-  each module's `11-testing.md`, "Cross-Module Data Flow" table) — see §7 below.
+- **Cross-module** — the specific, separately-tracked category all three modules name explicitly (§2
+  of each module's `11-testing.md`, "Cross-Module Data Flow" table) — see §7 below.
 
 ---
 
@@ -180,7 +203,12 @@ practice, not module-specific.
 
 Purpose: ensure existing functionality remains unaffected after changes — a module's own Regression
 Checklist (`11-testing.md` §13), including explicit non-regression cases for a newly-introduced rule
-(§2 above).
+(§2 above). Location's own Regression Checklist names its critical workflow chain explicitly: branch
+creation → status toggle → new SO/PO blocked when Inactive; QoH adjustment → non-negative floor →
+audit trail written; kit adjustment → component propagation (cross-module); part supersession →
+atomic quantity/cost move → open-order flag (cross-module); reorder-point recompute on every save;
+lost-sale factor non-compounding — the same pattern of naming the actual critical chain rather than
+a generic "re-run everything" instruction that Users' and UOM's own Regression Checklists use.
 
 ---
 
@@ -269,7 +297,11 @@ Document, per module:
 
 - Test datasets — a module's own seed data (`11-testing.md` §14): Users seeds ADR-002's 5
   tenant-facing roles + a default Profile template; UOM seeds its Functional Role starter set plus at
-  least one fully-valid UOM Group so conversion-service tests don't have to construct one per test.
+  least one fully-valid UOM Group so conversion-service tests don't have to construct one per test;
+  Location seeds at least one Active and one Inactive branch, a Product-at-Location row at a nonzero
+  QoH, a kit product with ≥2 components (coordinated with Products' own seed), a superseded/
+  superseding product pair, and a product/branch with sparse sales history (fewer transactions than
+  the configured lookback window, specifically to exercise BR-014/ADR-150's corrected divisor).
 - Sample users / sample products — module-specific, per §14 above.
 - Mock data — not used for anything a real (test) database and Prisma seed can provide instead
   (`6-development/3-coding-standards.md` §16: integration tests run against a real database, not
@@ -536,9 +568,9 @@ level, not a separate rule set):
 - `6-development/9-ci-cd.md` (CI-level test execution and gates)
 - `6-development/7-deployment-strategy.md` (this same late wave)
 - `6-development/10-debugging-guide.md` (this same late wave)
-- `5-modules/users/11-testing.md`, `5-modules/uom/11-testing.md`
+- `5-modules/users/11-testing.md`, `5-modules/uom/11-testing.md`, `5-modules/location/11-testing.md`
 - `decisions-log.md` (ADR-015, ADR-018, ADR-027, ADR-028, ADR-053, ADR-056, ADR-066, ADR-070,
-  ADR-081, ADR-190–192)
+  ADR-081, ADR-190–192, ADR-146–153, ADR-196–198)
 
 ---
 
@@ -547,6 +579,7 @@ level, not a separate rule set):
 | Version | Date | Author | Description |
 |----------|------|--------|-------------|
 | 1.0 | 2026-08-18 | Claude Code (docs-kit generation) | Initial Draft — first late-wave run, folding in both Users and UOM. |
+| 1.1 | 2026-08-19 | Claude Code (docs-kit generation) | Second late-wave run — folded in Location: its build-guidance-sourced testing approach (§1), golden-output tests for the demand/reorder-point pipeline (§2), the two named cross-module chain tests for kit propagation and part-supersession's open-order flagging (§3), boundary-inclusive invariant testing (§5), and its own seed-data/regression-checklist specifics (§5, §9). |
 
 ---
 
@@ -571,5 +604,14 @@ level, not a separate rule set):
   project's actual current staffing rather than a templated multi-role org — flagged as
   `[Assumption: ...]` per this prompt's own instruction rather than silently guessed.
 - The next module folded into this late wave should add its own concrete example wherever this
-  document currently draws only on Users/UOM (e.g. §5 Regression Testing's non-regression pattern,
-  §12's exploratory-test pattern), per `6-development/5-implementation-workflow.md`'s own closing note.
+  document currently draws only on Users/UOM/Location (e.g. §5 Regression Testing's non-regression
+  pattern, §12's exploratory-test pattern), per `6-development/5-implementation-workflow.md`'s own
+  closing note.
+- This second late-wave run adds Location's own concrete examples (§1, §2, §3, §5, §9) alongside,
+  not in place of, Users' and UOM's — Location is the first module whose testing document is
+  explicitly grounded in a dedicated legacy-derived build-guidance document
+  (`sot-docs/raw/2-module-specs/Location/build-guidance.md` §Test/Verification Strategy Pointer)
+  rather than this project's generic testing-strategy template alone, and contributes this project's
+  first explicitly-named cross-module chain tests for a computed (non-persisted) quantity value
+  (TC-008's kit propagation) and a supersession-triggered flag on another module's own open orders
+  (TC-016).

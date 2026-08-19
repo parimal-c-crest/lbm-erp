@@ -8,7 +8,7 @@
 | Version | 1.1 |
 | Status | Draft |
 | Author | Developer (AI-assisted) |
-| Last Updated | 2026-08-18 |
+| Last Updated | 2026-08-19 |
 
 ---
 
@@ -163,6 +163,7 @@ API (`8-api.md`) · UI (`9-ui.md`).
 |---|---|
 | 2026-08-18 | Initial draft (v1.0). |
 | 2026-08-18 | v1.1 — review pass: removed Sharing Rule references throughout (ADR-081), added Labor Status enum (ADR-077) and the third Time Clock status value for unclosed punches (ADR-037). |
+| 2026-08-19 | ADR-200: no field-level content change — this document never described the `id`/primary-key field's underlying database type; the dual-key retrofit (`id` real PK, `public_id` UUID external-facing) is fully described in `4-schema.md` §4/§6, which this document already defers to for implementation-level detail (§1 Overview). |
 
 # Approval
 

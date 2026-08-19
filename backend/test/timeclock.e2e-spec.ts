@@ -16,10 +16,11 @@ interface LoginResponseBody {
 describe('Users module — timeclock (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let roleId: string;
-  let adminRoleId: string;
-  let userId: string;
-  let adminUserId: string;
+  let roleId: bigint;
+  let adminRoleId: bigint;
+  let userId: bigint;
+  let userPublicId: string;
+  let adminUserId: bigint;
   let accessToken: string;
   let adminAccessToken: string;
 
@@ -57,6 +58,7 @@ describe('Users module — timeclock (e2e)', () => {
       },
     });
     userId = user.id;
+    userPublicId = user.publicId;
     const adminUser = await prisma.user.create({
       data: {
         firstName: 'E2E',
@@ -103,7 +105,11 @@ describe('Users module — timeclock (e2e)', () => {
       .send({ task: 'Receiving — PO-4821', laborStatus: 'working' })
       .expect(201);
 
-    expect(response.body).toMatchObject({ userId, status: 'clock_in', clockOut: null });
+    expect(response.body).toMatchObject({
+      userId: userPublicId,
+      status: 'clock_in',
+      clockOut: null,
+    });
 
     const record = await prisma.timeClockRecord.findFirst({ where: { userId } });
     expect(record?.status).toBe('clock_in');
@@ -166,7 +172,7 @@ describe('Users module — timeclock (e2e)', () => {
     });
 
     await request(app.getHttpServer())
-      .post(`/timeclock/override/${punch.id}/lock`)
+      .post(`/timeclock/override/${punch.publicId}/lock`)
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(201);
@@ -176,7 +182,7 @@ describe('Users module — timeclock (e2e)', () => {
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .send({
-        recordId: punch.id,
+        recordId: punch.publicId,
         clockIn: '2026-08-17T12:55:00Z',
         clockOut: '2026-08-17T21:05:00Z',
       })
@@ -197,7 +203,7 @@ describe('Users module — timeclock (e2e)', () => {
     });
 
     await request(app.getHttpServer())
-      .post(`/timeclock/override/${punch.id}/lock`)
+      .post(`/timeclock/override/${punch.publicId}/lock`)
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .expect(201);
@@ -207,7 +213,7 @@ describe('Users module — timeclock (e2e)', () => {
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${adminAccessToken}`)
       .send({
-        recordId: punch.id,
+        recordId: punch.publicId,
         clockIn: '2026-08-17T21:00:00Z',
         clockOut: '2026-08-17T13:00:00Z',
       })
@@ -229,7 +235,7 @@ describe('Users module — timeclock (e2e)', () => {
       .set('X-Tenant-Subdomain', 'skeleton')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({
-        recordId: punch.id,
+        recordId: punch.publicId,
         clockIn: '2026-08-17T13:00:00Z',
         clockOut: '2026-08-17T21:00:00Z',
       })

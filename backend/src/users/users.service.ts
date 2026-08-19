@@ -7,6 +7,7 @@ import {
 import * as bcrypt from 'bcrypt';
 
 import { EntityIdentifier } from '../common/value-objects/entity-identifier';
+import { toPublicEntity, toPublicEntityOrNull } from '../common/utils/public-entity.util';
 import { TenantContextService } from '../tenant/tenant-context.service';
 
 import { PASSWORD_PATTERN, type CreateUserDto } from './dto/create-user.dto';
@@ -30,9 +31,13 @@ export class UsersService {
   }
 
   async list(params: { search?: string; roleId?: string; skip?: number; take?: number }) {
+    // `params.roleId` is a client-supplied `public_id` (query string) — resolved to the Role's
+    // internal `id` before filtering (ADR-200). An unresolvable value returns "no rows" rather
+    // than throwing, since a stale/garbage filter is not the caller's Not-Found error.
+    const roleFilter = params.roleId ? await this.resolveRoleId(params.roleId) : undefined;
     const where = {
       isDeleted: false,
-      ...(params.roleId ? { roleId: params.roleId } : {}),
+      ...(params.roleId ? { roleId: roleFilter ?? -1n } : {}),
       ...(params.search
         ? {
             OR: [
@@ -55,27 +60,43 @@ export class UsersService {
       }),
       this.prisma.user.count({ where }),
     ]);
-    return { items, total };
+    return {
+      items: items.map((u) => ({ ...toPublicEntity(u), role: toPublicEntityOrNull(u.role) })),
+      total,
+    };
   }
 
-  async findById(id: string) {
-    const identifier = EntityIdentifier.from(id);
+  // Internal-only — returns the raw Prisma record (real bigint `id`), for callers within this
+  // service that need to chain further queries/writes. Every controller-facing read goes through
+  // `findById`, which reshapes the response (`toPublicEntity`) before it ever leaves this service.
+  private async findEntityByPublicId(publicId: string) {
+    const identifier = EntityIdentifier.from(publicId);
     const user = await this.prisma.user.findFirst({
-      where: { id: identifier.value, isDeleted: false },
+      where: { publicId: identifier.value, isDeleted: false },
       include: { role: true },
     });
     if (!user) throw new NotFoundException('User not found.');
     return user;
   }
 
+  private async resolveRoleId(publicId: string): Promise<bigint | undefined> {
+    const role = await this.prisma.role.findFirst({ where: { publicId } });
+    return role?.id;
+  }
+
+  async findById(id: string) {
+    const user = await this.findEntityByPublicId(id);
+    return { ...toPublicEntity(user), role: toPublicEntityOrNull(user.role) };
+  }
+
   // Real duplicate-username/email check (not the legacy informational-only version) —
   // USR-RULE-001, closes the gap for email too (ADR-157 previously only covered username).
-  private async assertUnique(email: string, username: string, excludeUserId?: string) {
+  private async assertUnique(email: string, username: string, excludeUserId?: bigint) {
     const conflict = await this.prisma.user.findFirst({
       where: {
         isDeleted: false,
         OR: [{ email }, { username }],
-        ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+        ...(excludeUserId !== undefined ? { id: { not: excludeUserId } } : {}),
       },
     });
     if (conflict) {
@@ -84,9 +105,13 @@ export class UsersService {
     }
   }
 
-  async create(dto: CreateUserDto, actorId: string | null) {
+  async create(dto: CreateUserDto, actorId: bigint | null) {
     await this.assertUnique(dto.email, dto.username);
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+    const roleId = dto.roleId ? await this.resolveRoleId(dto.roleId) : undefined;
+    if (dto.roleId && roleId === undefined) {
+      throw new NotFoundException('Referenced Role does not exist.');
+    }
 
     const user = await this.prisma.user.create({
       data: {
@@ -95,26 +120,25 @@ export class UsersService {
         username: dto.username,
         email: dto.email,
         phone: dto.phone,
-        roleId: dto.roleId,
+        roleId,
         defaultLocation: dto.defaultLocation,
         status: dto.status ?? 'active',
         isSuperAdmin: dto.isSuperAdmin ?? false,
         passwordHash,
-        createdBy: actorId,
-        updatedBy: actorId,
+        createdBy: actorId ?? undefined,
+        updatedBy: actorId ?? undefined,
       },
     });
     // Real-time enqueue on save (FR-013 Main Flow, ADR-031) — async, never blocks the save.
-    await this.quickBooksSync.enqueue(user.id);
-    return user;
+    await this.quickBooksSync.enqueue(user.publicId);
+    return toPublicEntity(user);
   }
 
   // Role/Profile change triggers permission read-model invalidation for that user immediately —
   // trivially true here since `PermissionsService` resolves fresh from live tables on every
   // request rather than caching (closes USR-RISK-015), so there is no stale cache to invalidate.
-  async update(id: string, dto: UpdateUserDto, actorId: string | null) {
-    const identifier = EntityIdentifier.from(id);
-    const existing = await this.findById(identifier.value);
+  async update(id: string, dto: UpdateUserDto, actorId: bigint | null) {
+    const existing = await this.findEntityByPublicId(id);
 
     if (dto.email || dto.username) {
       await this.assertUnique(
@@ -124,12 +148,18 @@ export class UsersService {
       );
     }
 
+    const roleId = dto.roleId !== undefined ? await this.resolveRoleId(dto.roleId) : undefined;
+    if (dto.roleId && roleId === undefined) {
+      throw new NotFoundException('Referenced Role does not exist.');
+    }
+    const { roleId: _ignoredRoleId, ...rest } = dto;
+
     const user = await this.prisma.user.update({
-      where: { id: identifier.value },
-      data: { ...dto, updatedBy: actorId },
+      where: { id: existing.id },
+      data: { ...rest, roleId, updatedBy: actorId ?? undefined },
     });
-    await this.quickBooksSync.enqueue(user.id);
-    return user;
+    await this.quickBooksSync.enqueue(user.publicId);
+    return toPublicEntity(user);
   }
 
   // Transfer-target-required delete (BR-001, ADR-154) — id validated non-empty/exists before any
@@ -143,9 +173,9 @@ export class UsersService {
       throw new ConflictException("Cannot transfer a user's records to themselves.");
     }
 
-    const user = await this.findById(identifier.value);
+    const user = await this.findEntityByPublicId(identifier.value);
     const targetExists = await this.prisma.user.findFirst({
-      where: { id: transferTarget.value, isDeleted: false },
+      where: { publicId: transferTarget.value, isDeleted: false },
     });
     if (!targetExists) throw new NotFoundException('Transfer-target user not found.');
 
@@ -166,17 +196,19 @@ export class UsersService {
     // real modules will add their own transfer-target reassignment as they're built).
     await this.prisma.user.updateMany({
       where: { createdBy: user.id },
-      data: { createdBy: transferTarget.value },
+      data: { createdBy: targetExists.id },
     });
     await this.prisma.user.updateMany({
       where: { updatedBy: user.id },
-      data: { updatedBy: transferTarget.value },
+      data: { updatedBy: targetExists.id },
     });
 
-    return this.prisma.user.update({
-      where: { id: user.id },
-      data: { isDeleted: true, deletedAt: new Date() },
-    });
+    return toPublicEntity(
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { isDeleted: true, deletedAt: new Date() },
+      }),
+    );
   }
 
   // Self-service (old-password re-verified) and admin-reset (not) collapsed into one command
@@ -185,7 +217,7 @@ export class UsersService {
   async changePassword(
     id: string,
     newPassword: string,
-    actorId: string | null,
+    actorId: bigint | null,
     oldPassword?: string,
   ) {
     if (!PASSWORD_PATTERN.test(newPassword)) {
@@ -193,8 +225,7 @@ export class UsersService {
         'Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 number.',
       );
     }
-    const identifier = EntityIdentifier.from(id);
-    const user = await this.findById(identifier.value);
+    const user = await this.findEntityByPublicId(id);
 
     if (oldPassword !== undefined) {
       const matches = await bcrypt.compare(oldPassword, user.passwordHash);
@@ -202,9 +233,11 @@ export class UsersService {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-    return this.prisma.user.update({
-      where: { id: identifier.value },
-      data: { passwordHash, updatedBy: actorId },
-    });
+    return toPublicEntity(
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash, updatedBy: actorId ?? undefined },
+      }),
+    );
   }
 }

@@ -46,3 +46,12 @@ export const ROLE_MENU_MAP: Record<Role, string[]> = {
 // unchanged by default. Swap this for the real authenticated role once login (Users module, M3)
 // exists.
 export const MOCK_CURRENT_ROLE: Role = 'Admin';
+
+// Super Admin is a structurally separate axis from the Role/Profile catalog above, never assigned
+// to a tenant's own business users (ADR-057; backend already models this as `User.isSuperAdmin`,
+// not a Role row — `backend/src/users/permissions/permissions.service.ts`). The Role type/map above
+// predates that model and has no "Super Admin" entry of its own, so Location's Super-Admin-only
+// actions (Add Location, ADR-055) key off this separate mock flag instead of `MOCK_CURRENT_ROLE`.
+// Flip to `false` locally to see the Super-Admin-gated UI (Add Location button/wizard route) hide,
+// same "UI convenience, server enforces" caveat as the rest of this file (ADR-006).
+export const MOCK_IS_SUPER_ADMIN = true;
